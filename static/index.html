@@ -1,0 +1,1807 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>OpChain · GUI Agent 自动化引擎</title>
+<style>
+  :root {
+    --bg: #f5f7fa; --panel: #ffffff; --border: #e3e8ef; --text: #1f2937;
+    --muted: #6b7280; --primary: #2563eb; --primary-soft: #eff4ff;
+    --green: #16a34a; --amber: #d97706; --red: #dc2626; --gray: #9ca3af;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; font-family: -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+    background: var(--bg); color: var(--text); font-size: 14px;
+  }
+  header {
+    display: flex; align-items: center; gap: 12px; padding: 12px 20px;
+    background: var(--panel); border-bottom: 1px solid var(--border);
+  }
+  header h1 { font-size: 16px; margin: 0; font-weight: 600; }
+  .badge {
+    font-size: 12px; padding: 3px 10px; border-radius: 999px;
+    background: var(--primary-soft); color: var(--primary); border: 1px solid #dbe6ff;
+  }
+  .badge.muted { background: #f1f3f5; color: var(--muted); border-color: var(--border); }
+  .spacer { flex: 1; }
+  .status-pill { font-size: 12px; padding: 3px 10px; border-radius: 999px; background: #f1f3f5; color: var(--muted); }
+  .status-pill.running { background: #e8f5ee; color: var(--green); }
+  .status-pill.done { background: #eef2ff; color: var(--primary); }
+  .status-pill.error, .status-pill.stopped { background: #fdeaea; color: var(--red); }
+
+  .controls { display: flex; align-items: center; gap: 8px; padding: 10px 20px; background: var(--panel); border-bottom: 1px solid var(--border); flex-wrap: wrap; }
+  button {
+    font-size: 13px; padding: 7px 14px; border-radius: 8px; border: 1px solid var(--border);
+    background: #fff; color: var(--text); cursor: pointer; transition: .15s;
+  }
+  button:hover:not(:disabled) { border-color: var(--primary); color: var(--primary); }
+  button:disabled { opacity: .45; cursor: not-allowed; }
+  button.primary { background: var(--primary); color: #fff; border-color: var(--primary); }
+  button.primary:hover:not(:disabled) { background: #1d4ed8; color: #fff; }
+  .speed { display: flex; align-items: center; gap: 6px; color: var(--muted); font-size: 12px; }
+  .progress { margin-left: auto; font-size: 13px; color: var(--muted); }
+  .progress b { color: var(--text); }
+
+  .layout { display: grid; grid-template-columns: 300px 1fr; gap: 16px; padding: 16px 20px; }
+  .phone-wrap { background: var(--panel); border: 1px solid var(--border); border-radius: 14px; padding: 16px; display: flex; flex-direction: column; align-items: center; }
+  .phone {
+    width: 240px; height: 460px; border: 10px solid #1f2937; border-radius: 28px; background: #fff;
+    position: relative; overflow: hidden; display: flex; flex-direction: column;
+  }
+  .phone .notch { position: absolute; top: 0; left: 50%; transform: translateX(-50%); width: 90px; height: 16px; background: #1f2937; border-radius: 0 0 10px 10px; }
+  .screen { flex: 1; padding: 22px 14px 14px; display: flex; flex-direction: column; }
+  .screen .title { font-size: 15px; font-weight: 600; margin-bottom: 10px; }
+  .card { border: 1px solid var(--border); border-radius: 10px; padding: 10px; margin-bottom: 8px; font-size: 12px; color: var(--muted); }
+  .card.active { border-color: var(--primary); background: var(--primary-soft); color: var(--primary); }
+  .highlight { margin-top: auto; font-size: 12px; color: var(--amber); text-align: center; min-height: 18px; }
+
+  .right { display: flex; flex-direction: column; gap: 16px; }
+  .panel { background: var(--panel); border: 1px solid var(--border); border-radius: 14px; }
+  .panel h2 { font-size: 13px; margin: 0; padding: 10px 14px; border-bottom: 1px solid var(--border); font-weight: 600; }
+  .tabs { display: flex; gap: 4px; padding: 8px 14px 0; }
+  .tab { font-size: 12px; padding: 6px 12px; border-radius: 8px 8px 0 0; cursor: pointer; color: var(--muted); border: 1px solid transparent; }
+  .tab.active { color: var(--primary); background: var(--primary-soft); border-color: var(--border); border-bottom-color: #fff; }
+  .tab-body { padding: 10px 14px; max-height: 320px; overflow: auto; }
+  .hidden { display: none; }
+
+  .step-row { display: flex; align-items: center; gap: 8px; padding: 5px 0; border-bottom: 1px dashed #f0f2f5; font-size: 13px; }
+  .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--gray); flex: none; }
+  .dot.running { background: var(--amber); animation: pulse 1s infinite; }
+  .dot.done { background: var(--green); }
+  .dot.error { background: var(--red); }
+  .dot.skip { background: var(--gray); }
+  .step-row .act { font-weight: 500; }
+  .step-row .arg { color: var(--muted); font-size: 12px; }
+  @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: .3; } }
+
+  .log-line { font-size: 12px; padding: 3px 0; font-family: ui-monospace, Menlo, monospace; color: #374151; }
+  .log-line.ERROR { color: var(--red); }
+  .log-line.WARN { color: var(--amber); }
+
+  table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--border); }
+  th { color: var(--muted); font-weight: 500; position: sticky; top: 0; background: #fff; }
+  td.link { color: var(--primary); word-break: break-all; }
+  .empty { color: var(--muted); font-size: 12px; padding: 12px 0; }
+  .toolbar { display: flex; gap: 8px; padding: 8px 14px; }
+
+  /* Agent 面板 */
+  .agent-panel { background: var(--panel); border: 1px solid #ddd6fe; border-radius: 14px; padding: 12px 14px; margin: 0 20px 16px; }
+  .agent-panel.hidden-panel { display: none; }
+  .agent-head { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+  .agent-status { font-size: 12px; color: var(--muted); }
+  .agent-controls { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  .agent-controls input { flex: 1; min-width: 260px; padding: 7px 12px; border: 1px solid var(--border); border-radius: 8px; font-size: 13px; }
+  .agent-controls input:focus { outline: none; border-color: #6d28d9; }
+  button.agent { background: #6d28d9; color: #fff; border-color: #6d28d9; }
+  button.agent:hover:not(:disabled) { background: #5b21b6; color: #fff; }
+  button.agent:disabled { opacity: .45; cursor: not-allowed; }
+  .agent-chain { margin-top: 10px; border-top: 1px dashed var(--border); padding-top: 8px; }
+  .agent-chain-head { font-size: 12px; color: var(--primary); cursor: pointer; user-select: none; }
+  .agent-chain pre { margin: 8px 0 0; max-height: 240px; overflow: auto; background: #0f172a; color: #e2e8f0; padding: 10px; border-radius: 8px; font-size: 11px; line-height: 1.5; }
+
+  .agent-line { font-size: 12px; padding: 3px 0; font-family: ui-monospace, Menlo, monospace; color: #374151; }
+  .agent-line.think { color: #6d28d9; }
+  .agent-line.verify { color: var(--green); }
+  .agent-line.sys { color: var(--muted); }
+  .agent-line.ok { color: var(--primary); font-weight: 600; }
+
+  /* 安全区域（框选范围） */
+  .region-badge {
+    display: inline-flex; align-items: center; gap: 6px; font-size: 12px;
+    padding: 3px 10px; border-radius: 999px; background: #ecfdf5; color: var(--green);
+    border: 1px solid #bbf7d0;
+  }
+  .region-badge.none { background: #f1f3f5; color: var(--muted); border-color: var(--border); }
+  .peek-panel { margin-top: 12px; padding: 12px; border: 1px solid var(--border); border-radius: 10px; background: var(--panel); display: flex; flex-direction: column; gap: 8px; }
+  .peek-h { font-size: 14px; font-weight: 700; }
+  .peek-sub { font-size: 12px; color: var(--muted); margin-top: 4px; }
+  .peek-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; font-size: 12px; }
+  .peek-grid code { font-size: 11px; word-break: break-all; color: var(--green); }
+  .peek-ocr { margin: 0; padding: 8px; background: #0f172a; color: #e2e8f0; border-radius: 8px; font-size: 11px; white-space: pre-wrap; max-height: 160px; overflow: auto; }
+  .peek-tip { font-size: 12px; color: var(--muted); line-height: 1.5; }
+  .peek-tip b { color: var(--green); }
+  .region-tools { display: flex; gap: 8px; align-items: center; padding: 8px 20px; background: var(--panel); border-bottom: 1px solid var(--border); flex-wrap: wrap; }
+  .region-tools input[type="number"] { padding: 4px 6px; border: 1px solid var(--border); border-radius: 6px; font-size: 12px; }
+
+  /* 框选模态 */
+  .overlay {
+    position: fixed; inset: 0; background: rgba(15,23,42,.72); z-index: 50;
+    display: none; align-items: center; justify-content: center; flex-direction: column;
+  }
+  .overlay.open { display: flex; }
+  .overlay .hint { color: #e2e8f0; font-size: 13px; margin-bottom: 10px; }
+  .select-stage {
+    /* 关键：stage 精确包裹 img（inline-block），且约束只加在 img 上；
+       否则 stage 与 img 被 vw/vh 两个不同视口维度分别限制，尺寸不一致，
+       百分比定位的框相对 stage 而非 img，窗口缩放时框就相对原图漂移。 */
+    position: relative; background: #000; border: 1px solid #334155; border-radius: 8px;
+    display: inline-block; line-height: 0;
+    touch-action: none; user-select: none;
+  }
+  .select-stage img { display: block; max-width: 90vw; max-height: 74vh; cursor: crosshair; }
+  .sel-box {
+    position: absolute; border: 2px solid #22c55e; background: rgba(34,197,94,.18);
+    pointer-events: none;
+  }
+  .sel-box::after {
+    content: attr(data-label); position: absolute; left: 0; top: -18px; white-space: nowrap;
+    font-size: 11px; color: #22c55e; background: rgba(0,0,0,.5); padding: 1px 5px; border-radius: 4px;
+  }
+  .overlay .actions { margin-top: 14px; display: flex; gap: 10px; }
+  .overlay .actions button { background: #fff; }
+  .overlay .actions button.primary { background: var(--primary); color: #fff; border-color: var(--primary); }
+
+  /* 标注模式（拖框定义点击区域） */
+  .anno-modal { background: #fff; border-radius: 14px; width: min(1120px, 94vw); max-height: 90vh; display: flex; flex-direction: column; overflow: hidden; }
+  .anno-head { display: flex; align-items: center; gap: 10px; padding: 12px 16px; border-bottom: 1px solid var(--border); }
+  .anno-head h3 { margin: 0; font-size: 15px; }
+  .anno-head .close { margin-left: auto; }
+  .anno-warn { display: none; margin: 10px 16px 0; padding: 10px 12px; border-radius: 10px; background: #fff7ed; border: 1px solid #fed7aa; color: #9a3412; font-size: 12.5px; line-height: 1.7; }
+  .anno-warn b { color: #c2410c; }
+  .anno-warn code { background: #ffedd5; padding: 1px 5px; border-radius: 4px; font-size: 12px; }
+  .anno-warn.show { display: block; }
+  .anno-body { display: grid; grid-template-columns: 1fr 344px; min-height: 0; }
+  .anno-stage-wrap { padding: 14px; display: flex; flex-direction: column; align-items: center; background: #0f172a; overflow: auto; }
+  .anno-stage-wrap .select-stage { background: #000; }
+  .anno-hint { color: #cbd5e1; font-size: 12px; margin-top: 10px; text-align: center; line-height: 1.6; }
+  .anno-recap { align-self: center; margin-bottom: 8px; padding: 6px 12px; border: 1px solid #38bdf8; background: #0c4a6e; color: #e0f2fe; border-radius: 8px; font-size: 12px; cursor: pointer; }
+  .anno-recap:hover { background: #075985; }
+  .anno-side { padding: 14px; border-left: 1px solid var(--border); overflow: auto; display: flex; flex-direction: column; gap: 10px; }
+  .anno-field { display: flex; flex-direction: column; gap: 4px; }
+  .anno-field label { font-size: 12px; color: var(--muted); }
+  .anno-field input, .anno-field select { padding: 6px 8px; border: 1px solid var(--border); border-radius: 8px; font-size: 13px; }
+  .anno-check { font-size: 13px; display: inline-flex; align-items: center; gap: 6px; cursor: pointer; }
+  .anno-steps-head { font-size: 13px; font-weight: 600; margin-top: 2px; display: flex; align-items: center; gap: 8px; }
+  .anno-add-cap { margin-left: auto; font-size: 11px; padding: 2px 8px; border: 1px solid var(--border); border-radius: 6px; background: #fff; cursor: pointer; color: var(--text); }
+  .anno-add-cap:hover { background: var(--primary); color: #fff; border-color: var(--primary); }
+  .anno-steps { display: flex; flex-direction: column; gap: 8px; overflow: auto; max-height: 340px; }
+  .anno-step { border: 1px solid var(--border); border-radius: 10px; padding: 8px; background: #fafbfc; }
+  .anno-step.sel { border-color: var(--primary); background: var(--primary-soft); }
+  .anno-step .row1 { display: flex; align-items: center; gap: 8px; }
+  .anno-step .idx { width: 20px; height: 20px; border-radius: 50%; background: var(--primary); color: #fff; font-size: 11px; display: flex; align-items: center; justify-content: center; flex: none; }
+  .anno-step .row1 select { flex: 1; padding: 5px 7px; border: 1px solid var(--border); border-radius: 6px; font-size: 13px; }
+  .anno-step .del { color: var(--red); cursor: pointer; font-size: 12px; flex: none; }
+  .anno-step .drag-h { cursor: grab; color: var(--muted); font-size: 15px; line-height: 1; user-select: none; flex: none; padding: 0 2px; }
+  .anno-step .drag-h:active { cursor: grabbing; }
+  .anno-step .mv { cursor: pointer; color: var(--primary); font-size: 12px; flex: none; padding: 0 1px; }
+  .anno-step .mv:hover { color: var(--primary-strong); }
+  .anno-step .params { margin-top: 6px; display: flex; flex-direction: column; gap: 6px; }
+  .anno-step .prow { display: flex; align-items: center; gap: 6px; }
+  .anno-step .prow label { font-size: 12px; color: var(--muted); min-width: 42px; }
+  .anno-step .prow input, .anno-step .prow select, .anno-step .prow textarea { flex: 1; padding: 5px 7px; border: 1px solid var(--border); border-radius: 6px; font-size: 12px; }
+  .anno-step .prow.note { font-size: 11px; color: var(--muted); }
+  .anno-actions { display: flex; gap: 8px; margin-top: 6px; }
+  .anno-actions button { flex: 1; }
+
+  /* 调试可视化：把每步点击区域标红 */
+  .dbg-layout { display: flex; gap: 12px; align-items: flex-start; }
+  .dbg-viewer { flex: 1; min-width: 0; }
+  .dbg-list { width: 286px; flex: none; overflow: auto; max-height: 460px; display: flex; flex-direction: column; gap: 6px; }
+  .dbg-empty { color: var(--muted); font-size: 12px; padding: 18px; text-align: center; line-height: 1.7; }
+  .dbg-wrap { position: relative; display: inline-block; line-height: 0; background: #000; border-radius: 8px; overflow: hidden; max-width: 100%; }
+  .dbg-wrap > img { display: block; max-width: 100%; max-height: 56vh; }
+  .dbg-box { position: absolute; border: 2px solid #ef4444; background: rgba(239,68,68,.20); box-sizing: border-box; pointer-events: none; }
+  .dbg-box.dim { border-color: rgba(239,68,68,.45); background: rgba(239,68,68,.08); }
+  .dbg-dot { position: absolute; width: 14px; height: 14px; margin: -7px 0 0 -7px; border: 2px solid #fff; border-radius: 50%; background: #ef4444; box-sizing: border-box; box-shadow: 0 0 0 2px rgba(0,0,0,.55); pointer-events: none; }
+  .dbg-num { position: absolute; transform: translate(-50%, -150%); color: #fff; background: #ef4444; font-size: 11px; padding: 0 6px; border-radius: 9px; white-space: nowrap; pointer-events: none; }
+  .dbg-item { border: 1px solid var(--border); border-radius: 8px; padding: 7px 9px; background: #fafbfc; cursor: pointer; font-size: 12px; }
+  .dbg-item.sel { border-color: #ef4444; background: #fef2f2; }
+  .dbg-item .t1 { display: flex; align-items: center; gap: 6px; }
+  .dbg-item .badge { width: 18px; height: 18px; border-radius: 50%; background: #ef4444; color: #fff; font-size: 11px; display: flex; align-items: center; justify-content: center; flex: none; }
+  .dbg-item .act { font-weight: 600; }
+  .dbg-item .coord { color: var(--muted); margin-top: 3px; word-break: break-all; }
+  .anno-box { position: absolute; border: 2px solid #22c55e; background: rgba(34,197,94,.18); cursor: move; box-sizing: border-box; }
+  .anno-box.sel { border-color: #f59e0b; background: rgba(245,158,11,.18); }
+  .anno-box .lbl { position: absolute; left: 0; top: -18px; white-space: nowrap; font-size: 11px; color: #22c55e; background: rgba(0,0,0,.5); padding: 1px 5px; border-radius: 4px; }
+  .anno-box.sel .lbl { color: #f59e0b; }
+  .anno-box .rs { position: absolute; right: -7px; bottom: -7px; width: 13px; height: 13px; background: #fff; border: 2px solid #22c55e; border-radius: 3px; cursor: nwse-resize; }
+  .anno-box.sel .rs { border-color: #f59e0b; }
+</style>
+</head>
+<body>
+<header>
+  <h1>OpChain · GUI Agent 自动化引擎</h1>
+  <span class="badge" id="chainName">网球约球抓取</span>
+  <span class="badge muted" id="deviceBadge">设备: Mock</span>
+  <span class="badge" id="ocrBadge">OCR: ?</span>
+  <div class="spacer"></div>
+  <span class="status-pill" id="statusPill">空闲</span>
+</header>
+
+<div class="controls">
+  <button class="primary" id="btnStart">▶ 开始</button>
+  <button id="btnPause">⏸ 暂停</button>
+  <button id="btnStep">⏭ 单步</button>
+  <button id="btnDebugStep" title="单步执行并逐步标红每次点击（便于排查点错）">🔍 调试单步</button>
+  <button id="btnStop">⏹ 停止</button>
+  <button id="btnReset">↺ 重置</button>
+  <select id="chainSelect" title="选择要运行的链路"></select>
+  <button id="btnNewChain" style="display:none" title="新建一个独立任务（每个任务的标注互不干扰）">➕ 新建任务</button>
+  <button id="btnDelChain" style="display:none" title="删除选中的自定义链路">🗑 删链路</button>
+  <button id="btnAnno" style="display:none">📌 标注模式</button>
+  <span class="speed">速度 <input type="range" id="speed" min="0.2" max="2" step="0.2" value="0.6" /> <span id="speedVal">0.6s</span></span>
+  <span class="progress" id="progress">第 <b>0</b> / 0 轮</span>
+  <label class="run-check" title="运行前隐藏最前的浏览器窗口，确保点击不被它遮挡、且翻页判定只针对微信（可根治「误判翻页→第②步点在第一页面」）"><input type="checkbox" id="hideBrowser" /> 隐藏浏览器再运行</label>
+</div>
+
+<div class="region-tools" id="regionTools" style="display:none">
+  <span style="color:var(--muted);font-size:12px">安全截图区域：</span>
+  <button id="btnPickRegion">📐 框选范围</button>
+  <button id="btnClearRegion">✕ 清除范围</button>
+  <span style="color:var(--muted);font-size:12px">（仅框选区域内的画面会被截取/操作，可减少大模型理解成本）</span>
+</div>
+
+<div class="region-tools" id="clickTools" style="display:none">
+  <span style="color:var(--muted);font-size:12px">点击精度打磨：</span>
+  <span style="font-size:12px">X偏移 <input type="number" id="offX" value="0" step="1" style="width:62px" /></span>
+  <span style="font-size:12px">Y偏移 <input type="number" id="offY" value="0" step="1" style="width:62px" /></span>
+  <button id="btnApplyOffset">应用偏移</button>
+  <button id="btnResetOffset">归零</button>
+  <label style="font-size:12px;color:var(--muted);display:inline-flex;align-items:center;gap:4px">
+    <input type="checkbox" id="retryOn" /> 启用自愈重试
+  </label>
+  <span style="font-size:12px">抖动±<input type="number" id="jitter" value="8" step="1" style="width:52px" />px</span>
+  <span style="font-size:12px">最多重试<input type="number" id="maxRetry" value="3" step="1" style="width:52px" />次</span>
+  <span id="clickHint" style="color:var(--muted);font-size:12px">（偏移补偿模型点击的系统偏差；自愈重试在点击后页面无变化时自动微调重点）</span>
+</div>
+
+<div class="agent-panel" id="agentPanel">
+  <div class="agent-head">
+    <span class="badge" style="background:#eef2ff;color:#6d28d9;border-color:#ddd6fe">🤖 GUI Agent 模式</span>
+    <span class="agent-status" id="agentStatus">空闲 · 大脑: MockBrain</span>
+  </div>
+  <div class="agent-controls">
+    <input id="agentGoal" placeholder="自然语言目标，如：抓取列表中每个场地的名称、地址和订场链接" />
+    <button class="agent" id="btnExplore">🤖 探索并合成链路</button>
+    <button id="btnReplay">▶ 重放合成链路</button>
+    <button id="btnAgentReset">↺ 重置</button>
+  </div>
+  <div style="margin-top:8px;font-size:12px;color:var(--muted)">
+    键盘安全开关（在运行 app.py 的终端按键）：<b>s</b> 紧急停止 · <b>p</b> 暂停/继续（或 Ctrl+C 终止进程）
+  </div>
+  <div class="agent-chain" id="agentChainWrap" style="display:none">
+    <div class="agent-chain-head" id="agentChainToggle">合成链路 (agent_synth.json) ▾</div>
+    <pre id="agentChainPre"></pre>
+  </div>
+</div>
+
+<div class="layout">
+  <div class="phone-wrap">
+    <div class="phone">
+      <div class="notch"></div>
+      <div class="screen">
+        <div class="title" id="screenTitle">球场列表</div>
+        <div class="card" id="card1">卡片 1 · 预订</div>
+        <div class="card" id="card2">卡片 2 · 预订</div>
+        <div class="card" id="card3">卡片 3 · 预订</div>
+        <div class="highlight" id="screenHighlight"></div>
+        <img id="screenImg" alt="实时截屏" style="display:none;width:100%;border-radius:8px;margin-top:8px;background:#000" />
+      </div>
+    </div>
+    <div class="region-badge none" id="regionBadge" style="margin-top:10px">安全区域：全屏</div>
+    <div style="margin-top:6px;color:var(--muted);font-size:12px;text-align:center">实时投屏（Mock 渲染）<br/>高亮 = 当前命中元素</div>
+    <div id="peekPanel" class="peek-panel" style="display:none"></div>
+  </div>
+
+  <div class="right">
+    <div class="panel">
+      <div class="tabs">
+        <div class="tab active" data-tab="steps">步骤时间线</div>
+        <div class="tab" data-tab="logs">实时日志</div>
+        <div class="tab" data-tab="data">抽取数据</div>
+        <div class="tab" data-tab="library">我的库</div>
+        <div class="tab" data-tab="debug">🔍 调试</div>
+        <div class="tab" data-tab="agent">Agent 推理</div>
+      </div>
+      <div class="tab-body" id="tab-steps"></div>
+      <div class="tab-body hidden" id="tab-logs"></div>
+      <div class="tab-body hidden" id="tab-agent"></div>
+      <div class="tab-body hidden" id="tab-data">
+        <div class="toolbar">
+          <button id="btnExport">导出 CSV</button>
+          <span class="empty" id="dataCount"></span>
+        </div>
+        <table id="dataTable">
+          <thead><tr><th>场地名</th><th>地址</th><th>链接</th><th>时间</th></tr></thead>
+          <tbody></tbody>
+        </table>
+        <div class="empty" id="dataEmpty">暂无数据，点「开始」后自动流入</div>
+      </div>
+      <div class="tab-body hidden" id="tab-library">
+        <div class="toolbar">
+          <button id="btnRefreshLib">↻ 刷新</button>
+          <a id="btnLibCsv" href="/library.csv" download="library.csv"><button type="button">⬇ 导出 CSV</button></a>
+          <span class="empty" id="libCount"></span>
+        </div>
+        <table id="libTable">
+          <thead><tr><th>场地名</th><th>地址</th><th>链接</th><th>时间</th></tr></thead>
+          <tbody></tbody>
+        </table>
+        <div class="empty" id="libEmpty">库为空。运行带「落库(emit)」步骤的链路后，复制的链接 + LLM 识别的标题/地址会持久化到这里（跨运行保留）。</div>
+      </div>
+      <div class="tab-body hidden" id="tab-debug">
+        <div class="toolbar">
+          <span class="empty" id="debugCount">尚未运行</span>
+          <label class="dbg-check"><input type="checkbox" id="dbgEvidence" /> 记录每步证据(前后截图+落点)</label>
+          <button id="btnVerify" title="单独执行第①步(卡片点击)一次，并把你标注时的截图一起对比，确认到底有没有翻页 / 落点偏没偏">🔬 验证第①步(卡片)点击</button>
+          <span style="display:inline-flex;align-items:center;gap:4px">
+            <label class="dbg-check" style="margin:0;font-size:12px">点击方式:</label>
+            <select id="clickMode" title="默认 to_pid(直投微信进程，已验证生效)；ax_press(辅助功能)也值得试" style="font-size:12px;padding:2px 4px;border-radius:4px;background:#222;color:#e6e8ec;border:1px solid #444">
+              <option value="to_pid" selected>🎯 直投PID(到微信进程)✅默认</option>
+              <option value="ax_press">♿ AXPress(辅助功能)</option>
+              <option value="human_like">拟人化(移鼠+按压)</option>
+              <option value="apple_script">AppleScript(激活+点击)</option>
+              <option value="cgevent_enhanced">CGEvent增强(source_state)</option>
+              <option value="cgevent">CGEvent(会话层)</option>
+            </select>
+          </span>
+          <span style="display:inline-flex;align-items:center;gap:4px">
+            <label class="dbg-check" style="margin:0;font-size:12px">识别模型:</label>
+            <select id="brainMode" title="LLM识别/判定 用哪个模型。默认 mock 只返回占位值；必须切到本地多模态才能真正识别场地名/地址" style="font-size:12px;padding:2px 4px;border-radius:4px;background:#222;color:#e6e8ec;border:1px solid #444">
+              <option value="mock">🧪 模拟(mock)</option>
+              <option value="local" selected>🤖 本地多模态(qwen2.5vl)</option>
+              <option value="uitars">🕹 本地GUI(ui-tars)</option>
+              <option value="custom">⚙ 自定义…</option>
+            </select>
+          </span>
+          <span id="brainCustom" style="display:none;align-items:center;gap:4px">
+            <input id="brainBaseUrl" placeholder="base_url" style="width:170px;font-size:11px;padding:2px 4px;border-radius:4px;background:#222;color:#e6e8ec;border:1px solid #444" />
+            <input id="brainModel" placeholder="model" style="width:120px;font-size:11px;padding:2px 4px;border-radius:4px;background:#222;color:#e6e8ec;border:1px solid #444" />
+          </span>
+          <button id="btnDebugViewer">🐞 落点排查视图</button>
+          <button id="btnDebugAll">显示全部(同页)</button>
+          <button id="btnDebugClear">清空调试</button>
+          <button id="btnPeek" title="截图并在画布上拖框，查看「送进 LLM 识别的那张裁剪图 + 全屏红框位置 + OCR 原始转写」，一眼区分截歪(坐标错)vs 识别错(文字读不出)。不写变量、不入库。">🔍 查看识别范围</button>
+        </div>
+        <div class="dbg-layout">
+          <div class="dbg-viewer">
+            <div class="dbg-empty" id="debugEmpty">运行后，每步点击会在「点击发生时」的截图上标红：<b style="color:#ef4444">红框</b>=瞄准区域，<b style="color:#ef4444">红点</b>=实际落点。点右侧列表可逐条查看。</div>
+            <div class="dbg-wrap" id="debugWrap" style="display:none">
+              <img id="debugImg" alt="调试截屏" />
+              <div id="debugOverlay"></div>
+            </div>
+          </div>
+          <div class="dbg-list" id="debugList"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="overlay" id="overlayPick">
+  <div class="hint">在全屏预览上按住鼠标拖拽，框选你只想抓取/操作的安全区域（例如小程序窗口）</div>
+  <div class="select-stage" id="pickStage">
+    <img id="pickImg" alt="全屏预览" />
+    <div class="sel-box" id="selBox" style="display:none"></div>
+  </div>
+  <div class="actions">
+    <button class="primary" id="pickConfirm">✓ 确认此范围</button>
+    <button id="pickCancel">取消</button>
+  </div>
+</div>
+
+<div class="overlay" id="overlayPeek">
+  <div class="hint">在截图预览上按住鼠标拖拽，框出你想「查看识别范围」的那一块（如场地名+地址），松开后点「查看」。红框与框选一致但读不出→识别问题；红框偏了→截歪（坐标问题）。</div>
+  <div class="select-stage" id="peekStage">
+    <img id="peekImg" alt="截图预览" />
+    <div class="sel-box" id="peekSelBox" style="display:none"></div>
+  </div>
+  <div class="actions">
+    <button class="primary" id="peekConfirm">🔍 查看识别范围</button>
+    <button id="peekCancel">取消</button>
+  </div>
+</div>
+
+<div class="overlay" id="overlayAnno">
+  <div class="anno-modal">
+    <div class="anno-head">
+      <h3>📌 标注模式 · 拖框定义点击区域</h3>
+      <button class="close" id="annoClose">✕ 关闭</button>
+    </div>
+    <div class="anno-warn" id="annoWarn">
+      ⚠️ 当前 <b>OCR 引擎 = mock（假定位）</b>：<code>text</code> / <code>template</code> 模式会在区域内做二次定位，但 mock 永远把点击甩到屏幕左上角固定点，<b>会导致「点得离标注非常远」</b>。<br/>
+      请统一用 <b>center（点区域中心）</b> 模式——它不依赖 OCR，在这台 Mac 上实测<b>零误差</b>。<br/>
+      若确实需要按文字/图标点击，请在启动器里设置 <code>OCR=real</code> 并安装真实 OCR（paddleocr + opencv）。
+    </div>
+    <div class="anno-body">
+      <div class="anno-stage-wrap">
+        <button id="annoRecapture" class="anno-recap" title="隐藏本网页窗口后重新截取微信界面">📷 重新截屏（微信界面）</button>
+        <button id="annoPreview" class="anno-recap" title="用当前微信实时画面叠加所有已画步骤框，检查落点是否还对得上（不运行）">👁 预览落点</button>
+        <div class="select-stage" id="annoStage">
+          <img id="annoImg" alt="参考截图" />
+          <!-- 框选出的区域由 JS 注入 .anno-box -->
+        </div>
+        <div class="anno-hint">在截图上按住拖拽画出区域 = 一个步骤；可画多个。点击框可选中，拖动框体移动、拖右下角手柄调整大小。<br/>区域会自动存为归一化坐标（抗窗口移动 / Retina），适合标准化的固定位置按钮。<br/><b style="color:#34d399">多页流程：</b>第①步画在页面1，要加第②步在页面2时，先点画布新建一个占位框（第②步），选中它，手动把微信切到页面2，再点「重新截屏」（只更新<b>选中那一步</b>的截图，不会清空其它步骤），然后拖动该框到按钮位置。<br/><b style="color:#fbbf24">截图中必须是【微信小程序】界面（不是本网页）。若截到的是网页，请先把微信作为普通窗口放在本网页之后，再点「重新截屏」。</b></div>
+      </div>
+      <div class="anno-side">
+        <div class="anno-field">
+          <label>链路名称</label>
+          <input id="annoChainName" placeholder="如：我的微信抓取链路" />
+        </div>
+        <label class="anno-check"><input type="checkbox" id="annoLoop" checked /> 包裹为循环（列表遍历，每轮重复这些步骤）</label>
+        <div class="anno-field" id="annoMaxRoundsWrap">
+          <label>最大轮次</label>
+          <input type="number" id="annoMaxRounds" value="8" min="1" />
+        </div>
+        <div class="anno-steps-head">步骤（<span id="annoCount">0</span>）· 每个框对应一步
+          <button id="annoAddCapture" class="anno-add-cap" title="直接添加一步「截图」，无需框选区域">📸 加截图步</button>
+        </div>
+        <div class="anno-steps" id="annoSteps"></div>
+        <div class="anno-actions">
+          <button id="annoSave">💾 保存链路</button>
+          <button class="primary" id="annoSaveRun">▶ 保存并运行</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const PAGE_LABEL = { list: "球场列表", detail: "场地详情", confirm: "确认订场", new_miniapp: "小程序（新）", menu: "更多菜单" };
+
+let es = null;
+let realScreen = false;  // 是否已切到真实设备截屏（此时不再用 Mock 装饰卡片）
+let ocrEngine = "mock";   // 后端 OCR 引擎：mock=假的（text/template 点击会失效），real=真实，lm=本地多模态模型（ui-tars:7b 定位 + qwen2.5vl 验证）
+// 顶部 OCR 模式徽章：直观显示当前是哪种引擎，避免「以为开了其实没开」
+function updateOcrBadge(mode) {
+  const el = $("ocrBadge");
+  if (!el) return;
+  if (mode === "real") {
+    el.textContent = "OCR: real（真实）";
+    el.style.background = "#064e3b"; el.style.color = "#6ee7b7"; el.style.borderColor = "#065f46";
+  } else if (mode === "lm") {
+    el.textContent = "OCR: lm（本地模型定位）";
+    el.style.background = "#1e3a8a"; el.style.color = "#93c5fd"; el.style.borderColor = "#1e40af";
+  } else {
+    el.textContent = "OCR: mock（假定位·text/template 不可用）";
+    el.style.background = "#7f1d1d"; el.style.color = "#fca5a5"; el.style.borderColor = "#991b1b";
+  }
+}
+// 标注模式警告条：按 OCR 引擎显示准确提示（mock 才会点错；lm 其实是可用本地模型，之前被误标成 mock）
+function updateAnnoWarn() {
+  const el = $("annoWarn");
+  if (!el) return;
+  if (ocrEngine === "lm") {
+    el.innerHTML = "✅ 当前 <b>OCR 引擎 = lm（本地多模态模型定位）</b>：<code>text</code> 模式可用——框大范围后填目标文字即可点中（按钮浮动也不怕）。<br/>"
+      + "<code>template</code> 图标模式仍需真实 OCR（本机未装 paddleocr），图标类请改用 <code>text</code> 或 <code>center</code>。";
+    el.classList.add("show");
+  } else if (ocrEngine === "real") {
+    el.classList.remove("show");
+  } else {
+    el.innerHTML = "⚠️ 当前 <b>OCR 引擎 = mock（假定位）</b>：<code>text</code> / <code>template</code> 模式会在区域内做二次定位，但 mock 永远把点击甩到屏幕左上角固定点，<b>会导致「点得离标注非常远」</b>。<br/>"
+      + "请统一用 <b>center（点区域中心）</b> 模式——它不依赖 OCR，在这台 Mac 上实测<b>零误差</b>。<br/>"
+      + "若确实需要按文字/图标点击，请在启动器里设置 <code>OCR=lm</code>（本机已就绪，免装重依赖）或 <code>OCR=real</code>（需装 paddleocr + opencv）。";
+    el.classList.add("show");
+  }
+}
+const ACTION_LABEL = {
+  llm_judge: "🤖 LLM 判定", llm_extract: "🤖 LLM 识别",
+  tap_text: "点击文字", tap_image: "点击图标", tap_coord: "点击坐标", tap_region: "区域点击",
+  swipe: "滑动", back: "返回", copy_link: "复制链接", emit: "落库",
+  ocr_extract: "OCR 抽取", assert: "断言", type_text: "输入文字", subchain: "子链", loop: "循环",
+  wait: "等待", capture: "截图",
+};
+function connect() {
+  es = new EventSource("/stream");
+  es.onmessage = (e) => {
+    const ev = JSON.parse(e.data);
+    handle(ev);
+  };
+}
+function handle(ev) {
+  switch (ev.type) {
+    case "snapshot":
+      if (ev.data) ev.data.forEach(addDataRow);
+      setStatus(ev.status);
+      setProgress(ev.progress);
+      setPage(ev.page);
+      break;
+    case "step": addStep(ev); break;
+    case "log": addLog(ev); break;
+    case "data": addDataRow(ev.record); break;
+    case "page": setPage(ev); break;
+    case "progress": setProgress(ev); break;
+    case "status": setStatus(ev.state, ev.count); break;
+    case "agent": addAgent(ev); break;
+    case "screen": setScreen(ev.image); break;
+    case "peek": showPeek(ev); break;
+    case "click": onDebugClick(ev); break;
+    case "reset": clearAll(); break;
+  }
+}
+
+// ---- 步骤时间线 ----
+function addStep(ev) {
+  const row = document.createElement("div");
+  row.className = "step-row";
+  const dot = document.createElement("span");
+  dot.className = "dot " + (ev.status === "running" ? "running" : ev.status === "done" ? "done" : ev.status === "error" ? "error" : "skip");
+  const act = document.createElement("span");
+  act.className = "act";
+  act.textContent = ACTION_LABEL[ev.action] || ev.action;
+  const arg = document.createElement("span");
+  arg.className = "arg";
+  const t = ev.target || {};
+  arg.textContent = t.text ? `「${t.text}」` : t.template ? `「${t.template}」` : t.direction ? `方向:${t.direction}` : "";
+  row.appendChild(dot); row.appendChild(act); row.appendChild(arg);
+  const box = $("tab-steps");
+  // 单步模式：仅高亮当前，不清空历史
+  box.appendChild(row);
+  box.scrollTop = box.scrollHeight;
+}
+
+// ---- 日志 ----
+function addLog(ev) {
+  const line = document.createElement("div");
+  line.className = "log-line " + (ev.level || "");
+  const ts = new Date().toLocaleTimeString("zh-CN", { hour12: false });
+  line.textContent = `[${ts}] ${ev.msg}`;
+  const box = $("tab-logs");
+  box.appendChild(line);
+  box.scrollTop = box.scrollHeight;
+}
+
+// ---- 数据 ----
+function addDataRow(rec) {
+  $("dataEmpty").style.display = "none";
+  const tb = $("dataTable").querySelector("tbody");
+  const tr = document.createElement("tr");
+  tr.innerHTML = `<td>${rec.venue || ""}</td><td>${rec.address || ""}</td><td class="link">${rec.link || ""}</td><td>${rec.ts || ""}</td>`;
+  tb.appendChild(tr);
+  $("dataCount").textContent = `共 ${tb.children.length} 条`;
+}
+
+// ---- 投屏 ----
+function setPage(ev) {
+  if (!ev) return;
+  if (!realScreen) $("screenTitle").textContent = PAGE_LABEL[ev.page] || ev.page;
+  $("screenHighlight").textContent = ev.highlight ? `▶ 命中: ${ev.highlight}` : "";
+  const cards = [$("card1"), $("card2"), $("card3")];
+  cards.forEach(c => c.classList.remove("active"));
+  if (!realScreen && ev.page === "list" && ev.highlight === "预订") cards[0].classList.add("active");
+}
+
+// ---- 真实设备实时截屏（MacDevice 等截图模式）----
+function setScreen(b64) {
+  if (!b64) return;
+  const img = $("screenImg");
+  if (!img) return;
+  img.src = "data:image/png;base64," + b64;
+  img.style.display = "block";
+  realScreen = true;
+  ["card1", "card2", "card3"].forEach(id => { const c = $(id); if (c) c.style.display = "none"; });
+  $("screenTitle").textContent = "实时截屏（真实设备）";
+}
+
+// ---- 调试工具：查看识别范围（Debug 面板「🔍 查看识别范围」按钮，走 do_control.peek）----
+// 把「送进 LLM 识别的那张裁剪图」连同全屏红框位置、OCR 原始转写一起展示，
+// 一眼区分「截歪（坐标错）」还是「识别错（文字读不出）」。
+function showPeek(ev) {
+  const p = $("peekPanel");
+  if (!p) return;
+  p.style.display = "block";
+  const r = (ev.region || []).map(v => (+v).toFixed(3)).join(", ");
+  const sr = (ev.screen_region || []).map(v => (+v).toFixed(3)).join(", ");
+  const hdr = ev.hdr || "🔍 识别范围预览";
+  const tip = ev.tip || "红框与你框选一致但读不出 → <b>识别问题</b>；红框偏了/没盖住文字 → <b>截歪（坐标问题）</b>";
+  const fmt = (b) => b ? `<img src="data:image/png;base64,${b}" style="width:100%;border-radius:8px;border:1px solid var(--border);background:#000" />` : "（无图）";
+  p.innerHTML = `
+    <div class="peek-h">${hdr}</div>
+    <div class="peek-sub">① 全屏中的实际裁剪位置（红框 = 真正送进 LLM 的范围）</div>
+    ${fmt(ev.full)}
+    <div class="peek-sub">② LLM 实际看到的裁剪内容</div>
+    ${fmt(ev.crop)}
+    <div class="peek-grid">
+      <div><b>画布归一化 region</b><br/><code>${r}</code></div>
+      <div><b>全屏归一化 screen_region</b><br/><code>${sr}</code></div>
+    </div>
+    <div class="peek-sub">③ 识别结果（模型实际返回）</div>
+    <pre class="peek-ocr">${escapeHtml(ev.ocr_text || "(无)")}</pre>
+    <div class="peek-tip">${tip}</div>
+  `;
+  // 滚动到面板，保证用户能看到
+  p.scrollIntoView({ behavior: "smooth", block: "nearest" });
+}
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+}
+
+// ---- 进度 / 状态 ----
+function setProgress(ev) {
+  if (!ev) return;
+  $("progress").innerHTML = `第 <b>${ev.round}</b> / ${ev.max || "?"} 轮`;
+}
+function setStatus(state, count) {
+  const pill = $("statusPill");
+  pill.className = "status-pill " + state;
+  const map = { idle: "空闲", running: "运行中", paused: "已暂停", done: "已完成",
+    stopped: "已停止", error: "异常", exploring: "探索中", synthesized: "已合成链路",
+    replaying: "重放中" };
+  pill.textContent = (map[state] || state) + (state === "done" && count != null ? ` · ${count} 条` : "");
+  const running = state === "running";
+  const paused = state === "paused";
+  const exploring = state === "exploring" || state === "replaying";
+  $("btnStart").disabled = running || exploring;
+  $("btnPause").disabled = !running;
+  $("btnStep").disabled = !(running || paused);
+  $("btnStop").disabled = !(running || paused || exploring);
+  $("btnReset").disabled = running || exploring;
+  $("btnExplore").disabled = exploring;
+  $("btnReplay").disabled = exploring;
+}
+
+// ---- Agent 推理流 ----
+function addAgent(ev) {
+  const box = $("tab-agent");
+  const line = document.createElement("div");
+  const ts = new Date().toLocaleTimeString("zh-CN", { hour12: false });
+  let cls = "agent-line", txt = "";
+  if (ev.phase === "explore") { cls += " sys"; txt = `▶ ${ev.msg}`; }
+  else if (ev.phase === "think") {
+    cls += " think";
+    const pg = ev.page || "?";
+    const act = ev.action || "?";
+    txt = `[${ts}] 感知(${pg}) → 规划 ${act}：${ev.reason || ""}`;
+  }
+  else if (ev.phase === "verify") { cls += " verify"; txt = `[${ts}] 校验：${ev.before} → ${ev.after} ${ev.ok ? "✓" : "✗"}`; }
+  else if (ev.phase === "explore_done") { cls += " ok"; txt = `✓ ${ev.msg}`; }
+  else if (ev.phase === "synthesized") { cls += " ok"; txt = `✓ ${ev.msg}`; }
+  else if (ev.phase === "replay") { cls += " sys"; txt = `▶ ${ev.msg}`; }
+  else { cls += " sys"; txt = ev.msg || ""; }
+  line.className = cls;
+  line.textContent = txt;
+  box.appendChild(line);
+  box.scrollTop = box.scrollHeight;
+  if (ev.phase === "explore") setAgentStatus("探索中…");
+  else if (ev.phase === "explore_done") setAgentStatus("探索完成 · 合成中…");
+  else if (ev.phase === "synthesized") setAgentStatus("已合成链路 · 可重放");
+  else if (ev.phase === "replay") setAgentStatus("重放中…");
+  if (ev.chain) showChain(ev.chain);
+}
+function setAgentStatus(s) { $("agentStatus").textContent = s; }
+function showChain(chain) {
+  $("agentChainWrap").style.display = "block";
+  $("agentChainPre").textContent = JSON.stringify(chain, null, 2);
+}
+
+function clearAll() {
+  $("tab-steps").innerHTML = "";
+  $("tab-logs").innerHTML = "";
+  $("tab-agent").innerHTML = "";
+  $("dataTable").querySelector("tbody").innerHTML = "";
+  $("dataEmpty").style.display = "block";
+  $("dataCount").textContent = "";
+  $("agentChainWrap").style.display = "none";
+  setAgentStatus("空闲 · 大脑: MockBrain");
+  setStatus("idle"); setProgress({ round: 0, max: 0 });
+  // 复位调试可视化
+  debugClicks = []; debugSel = -1; debugShowAll = false;
+  $("debugList").innerHTML = ""; $("debugCount").textContent = "尚未运行";
+  renderDebug();
+  // 复位投屏面板为 Mock 装饰态
+  realScreen = false;
+  const img = $("screenImg"); if (img) img.style.display = "none";
+  ["card1", "card2", "card3"].forEach(id => { const c = $(id); if (c) c.style.display = ""; });
+  setPage({ page: "list", highlight: null, round: 0 });
+}
+
+// ---- 标签切换 ----
+document.querySelectorAll(".tab").forEach(t => {
+  t.onclick = () => {
+    document.querySelectorAll(".tab").forEach(x => x.classList.remove("active"));
+    t.classList.add("active");
+    ["steps", "logs", "data", "library", "debug", "agent"].forEach(name => {
+      $("tab-" + name).classList.toggle("hidden", name !== t.dataset.tab);
+    });
+    if (t.dataset.tab === "library") refreshLibrary();
+    if (t.dataset.tab === "debug") renderDebug();
+  };
+});
+
+// ---- 我的库（持久化库 data/library.jsonl，跨运行保留）----
+async function refreshLibrary() {
+  try {
+    const d = await fetch("/library").then(r => r.json());
+    const tb = $("libTable").querySelector("tbody");
+    tb.innerHTML = "";
+    const rows = d.data || [];
+    $("libEmpty").style.display = rows.length ? "none" : "block";
+    $("libCount").textContent = rows.length ? `共 ${rows.length} 条` : "";
+    rows.forEach(r => {
+      const tr = document.createElement("tr");
+      ["venue", "address", "link", "ts"].forEach(k => {
+        const td = document.createElement("td");
+        const v = r[k] || "";
+        if (k === "link" && v) { const a = document.createElement("a"); a.href = v; a.target = "_blank"; a.textContent = v; a.style.wordBreak = "break-all"; td.appendChild(a); }
+        else { td.textContent = v; td.style.wordBreak = "break-all"; }
+        tr.appendChild(td);
+      });
+      tb.appendChild(tr);
+    });
+  } catch (e) {
+    $("libEmpty").style.display = "block";
+    $("libEmpty").textContent = "加载库失败：" + e;
+  }
+}
+$("btnRefreshLib").onclick = () => refreshLibrary();
+
+// ---- 控制 ----
+async function post(action, extra) {
+  const body = Object.assign({ action, speed: parseFloat($("speed").value) }, extra || {});
+  const r = await fetch("/control", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  return r.json().catch(() => ({}));  // 解析后端返回，便于上层回显错误（如「已在运行中」）
+}
+$("btnStart").onclick = async () => {
+  const sel = $("chainSelect").value;
+  const d = await post("start", sel ? { chain: sel } : null);
+  if (d && d.ok === false) {
+    // 把后端拒绝原因（如「已有任务在后台运行，请先点停止」）直接提示出来，
+    // 否则点击「开始」会像「没反应」一样，用户不知道要先停止。
+    alert("无法开始：" + (d.msg || "未知原因"));
+    return;
+  }
+};
+$("btnPause").onclick = () => post("pause");
+$("btnStep").onclick = () => post("step");
+$("btnStop").onclick = () => post("stop");
+$("btnReset").onclick = () => post("reset");
+$("speed").oninput = () => { $("speedVal").textContent = $("speed").value + "s"; };
+
+// ---- 链路列表（标注 UI 保存的自定义链路 + 内置链路）----
+// CHAIN_SEL_KEY：记住上次选中的任务链路，刷新后还原 → annoKey() 才对得上，标注才不会"恢复原样"。
+const CHAIN_SEL_KEY = "opchain_chain_sel";
+async function loadChainList(selectVal) {
+  const d = await fetch("/chains").then(r => r.json());
+  const sel = $("chainSelect");
+  // 优先级：显式传入 > 已保存的选中项 > 当前值（通常为空，因为 innerHTML 刚清空）
+  const cur = selectVal || localStorage.getItem(CHAIN_SEL_KEY) || sel.value;
+  sel.innerHTML = "";
+  (d.chains || []).forEach(c => {
+    const o = document.createElement("option");
+    o.value = c.file; o.textContent = c.name; sel.appendChild(o);
+  });
+  if (cur && [...sel.options].some(o => o.value === cur)) {
+    sel.value = cur;
+    localStorage.setItem(CHAIN_SEL_KEY, cur);
+  }
+}
+$("btnDelChain").onclick = () => {
+  const sel = $("chainSelect").value;
+  if (!sel) return;
+  if (!confirm("确认删除链路「" + ($("chainSelect").selectedOptions[0]?.textContent || sel) + "」？")) return;
+  agentPost("delete_chain", { file: sel }).then(d => {
+    if (d && d.ok) {
+      if (localStorage.getItem(CHAIN_SEL_KEY) === sel) {
+        localStorage.removeItem(CHAIN_SEL_KEY);
+        localStorage.removeItem("opchain_anno::" + sel);
+      }
+      loadChainList();
+    }
+    else if (d && d.msg) alert(d.msg);
+  });
+};
+
+// 新建任务：在后端创建一个空的独立链路文件，立即出现在下拉框；
+// 标注数据按该文件隔离存储，天然互不干扰。随后打开标注模式（清空画布）。
+$("btnNewChain").onclick = async () => {
+  const name = prompt("新任务名称：", "新任务");
+  if (name === null) return;
+  const d = await agentPost("new_chain", { name: (name || "").trim() || "新任务" });
+  if (!d || !d.ok) { alert((d && d.msg) || "新建失败"); return; }
+  await loadChainList(d.file);
+  localStorage.setItem(CHAIN_SEL_KEY, d.file);
+  annoBoxes = []; annoSel = -1; annoCfg = { loop: true, max_rounds: 8 };
+  openAnno();
+};
+
+// 切换任务（下拉框）：若标注面板已打开，立即载入该任务自己的标注，
+// 否则下次打开标注模式时会自动按新任务加载（由 annoKey() 决定）。
+$("chainSelect").addEventListener("change", () => {
+  localStorage.setItem(CHAIN_SEL_KEY, $("chainSelect").value);
+  if (!$("overlayAnno").classList.contains("open")) return;
+  const selName = ($("chainSelect").selectedOptions[0] || {}).textContent || "";
+  const o = loadAnnoForCurrentChain();
+  if (o) {
+    annoBoxes = o.boxes || []; annoCfg = o.cfg || { loop: true, max_rounds: 8 };
+    $("annoChainName").value = o.name || selName;
+    if (annoBoxes.some(b => b.x > 1 || b.y > 1 || b.w > 1 || b.h > 1)) annoBoxes = [];
+  } else {
+    annoBoxes = []; annoCfg = { loop: true, max_rounds: 8 };
+    $("annoChainName").value = selName;
+  }
+  annoSel = -1;
+  renderAnnoSteps(); renderAnnoBoxes();
+});
+
+// ---- Agent 控制 ----
+async function agentPost(action, extra) {
+  const body = Object.assign({ action }, extra || {});
+  const r = await fetch("/control", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  return r.json();
+}
+$("btnExplore").onclick = () => {
+  const goal = $("agentGoal").value.trim();
+  agentPost("explore", { goal }).then(d => {
+    if (!d.ok) alert(d.msg);
+    else setAgentStatus("探索中…");
+  });
+};
+$("btnReplay").onclick = () => {
+  agentPost("replay").then(d => {
+    if (!d.ok) alert(d.msg);
+    else setAgentStatus("重放中…");
+  });
+};
+$("btnAgentReset").onclick = () => agentPost("agent_reset");
+$("agentChainToggle").onclick = () => {
+  const pre = $("agentChainPre");
+  pre.style.display = pre.style.display === "none" ? "block" : "none";
+  $("agentChainToggle").textContent = pre.style.display === "none"
+    ? "合成链路 (agent_synth.json) ▸" : "合成链路 (agent_synth.json) ▾";
+};
+// 初始加载已有合成链路（如刷新后）
+fetch("/agent_chain").then(r => r.json()).then(d => {
+  if (d.chain && Object.keys(d.chain).length) showChain(d.chain);
+});
+fetch("/state").then(r => r.json()).then(d => {
+  if (d.agent) {
+    const b = d.agent.brain || "MockBrain";
+    if (d.agent.phase === "idle") setAgentStatus("空闲 · 大脑: " + b);
+  }
+});
+
+$("btnExport").onclick = () => {
+  fetch("/data").then(r => r.json()).then(d => {
+    const rows = [["场地名", "地址", "链接", "时间", "来源"]];
+    d.data.forEach(r => rows.push([r.venue || "", r.address || "", r.link || "", r.ts || "", r.source || ""]));
+    const csv = rows.map(r => r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(",")).join("\n");
+    const blob = new Blob(["\ufeff" + csv], { type: "text/csv;charset=utf-8" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob); a.download = "抓取结果.csv"; a.click();
+  });
+};
+
+// ================= 安全截图区域（框选范围） =================
+const REGION_KEY = "opchain_region";
+let screenLogical = { w: 0, h: 0 };   // 当前设备逻辑点数屏幕尺寸
+let picking = false, pickStart = null, pickCur = null;
+
+function showRegionBadge(reg) {
+  const b = $("regionBadge");
+  if (reg && reg.w > 0) {
+    b.className = "region-badge";
+    b.textContent = `安全区域：${Math.round(reg.x)},${Math.round(reg.y)} ${Math.round(reg.w)}×${Math.round(reg.h)}`;
+  } else {
+    b.className = "region-badge none";
+    b.textContent = "安全区域：全屏";
+  }
+}
+
+async function applyRegion(reg) {
+  const d = await agentPost("set_region", reg);
+  if (d && d.region) {
+    showRegionBadge(d.region);
+    localStorage.setItem(REGION_KEY, JSON.stringify(d.region));
+  } else if (d && d.ok) {
+    showRegionBadge(null);
+    localStorage.removeItem(REGION_KEY);
+  } else if (d && d.msg) {
+    alert(d.msg);
+  }
+}
+
+// 打开框选模态：抓取全屏预览 + 已知逻辑屏幕尺寸
+async function openRegionPicker() {
+  const cap = await fetch("/capture").then(r => r.json());
+  if (!cap.image) { alert("无法获取全屏预览（请确认运行 app.py 的终端已授权「屏幕录制」权限）"); return; }
+  const img = $("pickImg");
+  img.src = "data:image/png;base64," + cap.image;
+  $("selBox").style.display = "none";
+  $("overlayPick").classList.add("open");
+  picking = false; pickStart = pickCur = null;
+}
+
+function closeRegionPicker() { $("overlayPick").classList.remove("open"); }
+
+function pickRectFromEvent(e) {
+  const stage = $("pickStage");
+  const r = stage.getBoundingClientRect();
+  const cx = Math.max(0, Math.min(e.clientX - r.left, r.width));
+  const cy = Math.max(0, Math.min(e.clientY - r.top, r.height));
+  return { x: cx, y: cy, w: r.width, h: r.height };
+}
+
+function drawSelBox() {
+  const box = $("selBox");
+  if (!pickStart || !pickCur) { box.style.display = "none"; return; }
+  const x = Math.min(pickStart.x, pickCur.x), y = Math.min(pickStart.y, pickCur.y);
+  const w = Math.abs(pickCur.x - pickStart.x), h = Math.abs(pickCur.y - pickStart.y);
+  box.style.display = "block";
+  box.style.left = x + "px"; box.style.top = y + "px";
+  box.style.width = w + "px"; box.style.height = h + "px";
+  // 换算成逻辑点数（预览图与原屏等比缩放）
+  const img = $("pickImg");
+  const sx = screenLogical.w / img.clientWidth;
+  const sy = screenLogical.h / img.clientHeight;
+  box.dataset.label = `${Math.round(x*sx)},${Math.round(y*sy)} ${Math.round(w*sx)}×${Math.round(h*sy)}`;
+}
+
+$("pickStage").addEventListener("mousedown", (e) => {
+  pickStart = pickCur = pickRectFromEvent(e);
+  picking = true; drawSelBox();
+});
+$("pickStage").addEventListener("mousemove", (e) => {
+  if (!picking) return;
+  pickCur = pickRectFromEvent(e); drawSelBox();
+});
+window.addEventListener("mouseup", () => {
+  if (picking) { picking = false; }
+});
+
+async function confirmRegion() {
+  if (!pickStart || !pickCur) { alert("请先在预览图上拖拽框选一个范围"); return; }
+  const img = $("pickImg");
+  const sx = screenLogical.w / img.clientWidth;
+  const sy = screenLogical.h / img.clientHeight;
+  const x = Math.min(pickStart.x, pickCur.x) * sx;
+  const y = Math.min(pickStart.y, pickCur.y) * sy;
+  const w = Math.abs(pickCur.x - pickStart.x) * sx;
+  const h = Math.abs(pickCur.y - pickStart.y) * sy;
+  if (w < 10 || h < 10) { alert("框选范围太小，请重选"); return; }
+  await applyRegion({ x, y, w, h });
+  closeRegionPicker();
+}
+
+$("btnPickRegion").onclick = () => openRegionPicker();
+$("btnClearRegion").onclick = () => {
+  agentPost("clear_region").then(d => {
+    if (d && d.ok) { showRegionBadge(null); localStorage.removeItem(REGION_KEY); }
+  });
+};
+$("pickCancel").onclick = () => closeRegionPicker();
+$("pickConfirm").onclick = () => confirmRegion();
+
+// ---- 调试：查看识别范围（不依赖标注链，走 do_control.peek → 模块级 do_peek）----
+// 与「标注模式框选」同源：优先用当前手机预览截图（= llm_extract 实际看到的画布），
+// 没有再退回全屏截图（仅当未设安全区时二者等价）。region 归一化到该画布，后端 do_peek 同款处理。
+let peeking = false, peekStart = null, peekCur = null, peekRegion = null;
+async function openPeek() {
+  const cur = $("screenImg").src;
+  let src = (cur && cur.startsWith("data:")) ? cur : null;
+  if (!src) {
+    try {
+      const cap = await fetch("/capture").then(r => r.json());
+      if (cap.image) src = "data:image/png;base64," + cap.image;
+    } catch (e) { /* ignore */ }
+  }
+  if (!src) { alert("无法获取截图（请确认运行 app.py 的终端已授权「屏幕录制」权限，或先运行一次）"); return; }
+  $("peekImg").src = src;
+  $("peekSelBox").style.display = "none";
+  $("overlayPeek").classList.add("open");
+  peekRegion = null; peeking = false; peekStart = peekCur = null;
+}
+function closePeek() { $("overlayPeek").classList.remove("open"); }
+function peekRectFromEvent(e) {
+  const stage = $("peekStage");
+  const r = stage.getBoundingClientRect();
+  const cx = Math.max(0, Math.min(e.clientX - r.left, r.width));
+  const cy = Math.max(0, Math.min(e.clientY - r.top, r.height));
+  return { x: cx, y: cy, w: r.width, h: r.height };
+}
+function drawPeekSelBox() {
+  const box = $("peekSelBox");
+  if (!peekStart || !peekCur) { box.style.display = "none"; return; }
+  const x = Math.min(peekStart.x, peekCur.x), y = Math.min(peekStart.y, peekCur.y);
+  const w = Math.abs(peekCur.x - peekStart.x), h = Math.abs(peekCur.y - peekStart.y);
+  box.style.display = "block";
+  box.style.left = x + "px"; box.style.top = y + "px";
+  box.style.width = w + "px"; box.style.height = h + "px";
+}
+function computePeekRegion() {
+  if (!peekStart || !peekCur) return;
+  const img = $("peekImg");
+  const W = img.clientWidth || 1, H = img.clientHeight || 1;
+  const x = Math.min(peekStart.x, peekCur.x) / W;
+  const y = Math.min(peekStart.y, peekCur.y) / H;
+  const w = Math.abs(peekCur.x - peekStart.x) / W;
+  const h = Math.abs(peekCur.y - peekStart.y) / H;
+  peekRegion = [Math.round(x*10000)/10000, Math.round(y*10000)/10000, Math.round(w*10000)/10000, Math.round(h*10000)/10000];
+}
+$("peekStage").addEventListener("mousedown", (e) => {
+  peekStart = peekCur = peekRectFromEvent(e); peeking = true; drawPeekSelBox();
+});
+$("peekStage").addEventListener("mousemove", (e) => {
+  if (!peeking) return; peekCur = peekRectFromEvent(e); drawPeekSelBox();
+});
+window.addEventListener("mouseup", () => { if (peeking) { peeking = false; computePeekRegion(); } });
+async function confirmPeek() {
+  if (!peekRegion || peekRegion[2] < 0.01 || peekRegion[3] < 0.01) { alert("请先在预览图上拖拽框选一个范围（至少占画面 1%）"); return; }
+  closePeek();
+  try {
+    const d = await agentPost("peek", { region: peekRegion });
+    if (d && d.msg && !d.ok) alert(d.msg);
+  } catch (e) {
+    alert("查看识别范围失败：" + (e && e.message ? e.message : e) + "\n（请确认运行 app.py 的终端已授权「屏幕录制」权限，且设备已连接）");
+  }
+}
+$("btnPeek").onclick = () => openPeek();
+$("peekCancel").onclick = () => closePeek();
+$("peekConfirm").onclick = () => confirmPeek();
+
+// ---- 点击精度打磨 ----
+const OFFSET_KEY = "opchain_click_offset";
+const RETRY_KEY = "opchain_click_retry";
+
+function applyClickOffset(dx, dy) {
+  return agentPost("set_click_offset", { dx, dy }).then(d => {
+    if (d && d.ok) localStorage.setItem(OFFSET_KEY, JSON.stringify([dx, dy]));
+    else if (d && d.msg) alert(d.msg);
+    return d;
+  });
+}
+function applyTapRetry(on, jitter, maxRetry) {
+  const m = on ? Math.max(0, parseInt(maxRetry) || 0) : 0;
+  const j = on ? Math.max(0, parseFloat(jitter) || 0) : 0;
+  return agentPost("set_tap_retry", { max_retry: m, jitter: j }).then(d => {
+    if (d && d.ok) localStorage.setItem(RETRY_KEY, JSON.stringify({ on, jitter, maxRetry }));
+    return d;
+  });
+}
+$("btnApplyOffset").onclick = () =>
+  applyClickOffset(parseFloat($("offX").value) || 0, parseFloat($("offY").value) || 0);
+$("btnResetOffset").onclick = () => {
+  $("offX").value = 0; $("offY").value = 0;
+  applyClickOffset(0, 0);
+};
+$("retryOn").onchange = () =>
+  applyTapRetry($("retryOn").checked, parseFloat($("jitter").value) || 0, parseInt($("maxRetry").value) || 0);
+function syncRetryInputs() {
+  if ($("retryOn").checked)
+    applyTapRetry(true, parseFloat($("jitter").value) || 0, parseInt($("maxRetry").value) || 0);
+}
+$("jitter").onchange = syncRetryInputs;
+$("maxRetry").onchange = syncRetryInputs;
+
+// 设备为 mac 时显示框选工具；并恢复已保存区域 / 反映后端当前区域
+fetch("/state").then(r => r.json()).then(d => {
+  if (d.ocr) { ocrEngine = d.ocr; updateOcrBadge(d.ocr); }
+  if (d.device === "mac") {
+    $("regionTools").style.display = "flex";
+    $("clickTools").style.display = "flex";
+    $("btnAnno").style.display = "inline-block";
+    $("btnDelChain").style.display = "inline-block";
+    $("btnNewChain").style.display = "inline-block";
+    loadChainList();
+    if (d.screen) screenLogical = d.screen;
+    if (d.region) {
+      showRegionBadge(d.region);
+      localStorage.setItem(REGION_KEY, JSON.stringify(d.region));
+    } else {
+      // 尝试从本地恢复上次框选
+      const saved = localStorage.getItem(REGION_KEY);
+      if (saved) {
+        try { applyRegion(JSON.parse(saved)); } catch (e) {}
+      }
+    }
+    // 反映后端当前点击偏移 / 自愈重试；并优先从本地恢复上次设置
+    const off = localStorage.getItem(OFFSET_KEY);
+    let dx = 0, dy = 0;
+    if (off) { try { [dx, dy] = JSON.parse(off); } catch (e) {} }
+    else if (d.click_offset) { dx = d.click_offset.dx || 0; dy = d.click_offset.dy || 0; }
+    $("offX").value = dx; $("offY").value = dy;
+    applyClickOffset(parseFloat(dx) || 0, parseFloat(dy) || 0);
+
+    let retrySaved = null;
+    const rs = localStorage.getItem(RETRY_KEY);
+    if (rs) { try { retrySaved = JSON.parse(rs); } catch (e) {} }
+    const rt = retrySaved || d.tap_retry || {};
+    const on = !!(retrySaved ? retrySaved.on : (d.tap_retry && (d.tap_retry.max_retry > 0 && d.tap_retry.jitter > 0)));
+    $("retryOn").checked = on;
+    if (rt.jitter != null) $("jitter").value = rt.jitter;
+    if (rt.maxRetry != null) $("maxRetry").value = rt.maxRetry;
+    if (on) applyTapRetry(true, parseFloat($("jitter").value) || 0, parseInt($("maxRetry").value) || 0);
+  }
+});
+
+// ================= 标注模式（拖框定义点击区域 → 生成链路） =================
+// 标注数据按「任务（链路文件）」隔离存储：每个任务有自己独立的 key，
+// 切换任务时只读写各自的数据，互不覆盖（根治"改一个任务连累其它任务"）。
+function annoKey() {
+  const f = (document.getElementById("chainSelect") || {}).value || "__draft__";
+  return "opchain_anno::" + f;
+}
+// 读取当前任务的标注：优先各自独立的 key；若该任务从未单独标注过，
+// 回退到旧版全局键 opchain_anno（防止历史标注丢失）；载入后即会被写回各自 key。
+function loadAnnoForCurrentChain() {
+  let raw = localStorage.getItem(annoKey()) || localStorage.getItem("opchain_anno");
+  if (!raw) return null;
+  try { return JSON.parse(raw); } catch (e) { return null; }
+}
+const ANNO_ACTIONS = ["tap_region", "tap_text", "type_text", "swipe", "copy_link", "back", "emit", "llm_extract", "llm_judge", "wait", "capture"];
+let annoBoxes = [];   // {x,y,w,h(归一化 0..1,相对参考截图), action, params:{}, image(该步所属截图 base64)}
+let annoSel = -1;
+let annoCurImage = "";  // 当前标注界面正在显示的截图（base64），每步可不同
+let annoCfg = { loop: true, max_rounds: 8 };
+let drawing = null, moving = null, resizing = null;
+let annoDragFrom = -1;  // 拖拽排序：源步骤索引
+
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+const stageRect = () => $("annoStage").getBoundingClientRect();
+
+async function captureAnnoImage() {
+  // 优先截"目标界面"（隐藏本网页浏览器后截微信）；失败回退普通全屏截
+  let cap = await fetch("/capture_target").then(r => r.json()).catch(() => ({}));
+  if (!cap.image) cap = await fetch("/capture").then(r => r.json()).catch(() => ({}));
+  return cap.image || "";
+}
+async function openAnno() {
+  try {
+    // 先打开标注面板，避免"截屏卡住 / 浏览器被临时隐藏"导致看起来完全没反应
+    annoSel = -1;
+    $("overlayAnno").classList.add("open");
+    // 异步截屏（隐藏浏览器截微信），失败也不阻塞面板
+    let image = "";
+    try { image = await captureAnnoImage(); }
+    catch (e) { image = ""; console.warn("captureAnnoImage 失败:", e); }
+    annoCurImage = image;
+    const img = $("annoImg");
+    img.onload = () => renderAnnoBoxes();
+    if (image) img.src = "data:image/png;base64," + image;
+    // 当前选中任务的显示名称，用于预填"任务名"（保存时写回该链路文件）
+    const selName = ($("chainSelect").selectedOptions[0] || {}).textContent || "";
+    const o = loadAnnoForCurrentChain();
+    if (o) {
+      annoBoxes = o.boxes || []; annoCfg = o.cfg || annoCfg;
+      $("annoChainName").value = o.name || selName;
+      // 兼容旧版：早期草稿把框存成显示像素（值常 >1），现在改归一化[0..1]，旧数据直接丢弃重画
+      if (annoBoxes.some(b => b.x > 1 || b.y > 1 || b.w > 1 || b.h > 1)) annoBoxes = [];
+    } else {
+      // 该任务尚无标注：用下拉中的任务名预填，避免误存到别的任务
+      $("annoChainName").value = selName;
+    }
+    // 选中步骤若自带截图，切到该截图显示（多页流程：不同步骤可截不同页面）；否则用刚截的全局图
+    if (annoSel >= 0 && annoBoxes[annoSel] && annoBoxes[annoSel].image) {
+      annoCurImage = annoBoxes[annoSel].image;
+      img.src = "data:image/png;base64," + annoCurImage;
+    }
+    $("annoLoop").checked = annoCfg.loop !== false;
+    $("annoMaxRounds").value = annoCfg.max_rounds || 8;
+    // OCR 引擎提示：mock=假定位（text/template 会点错，建议 center）；lm=本地模型定位（text 可用，template 需 real）；real=真实 OCR（全可用）
+    updateAnnoWarn();
+    renderAnnoSteps(); renderAnnoBoxes();
+  } catch (e) {
+    // 任何意外异常都变成可见提示，避免"静默无反应"难以排查
+    alert("标注模式打开失败：" + (e && e.message ? e.message : e));
+    console.error(e);
+  }
+}
+function closeAnno() { $("overlayAnno").classList.remove("open"); }
+$("annoRecapture").onclick = async () => {
+  const btn = $("annoRecapture"); btn.disabled = true; const old = btn.textContent; btn.textContent = "截屏中…";
+  const image = await captureAnnoImage();
+  btn.disabled = false; btn.textContent = old;
+  if (!image) { alert("重新截屏失败（请确认已授权「屏幕录制」与「辅助功能」）"); return; }
+  // 只更新「当前选中步骤」的截图，其它步骤保持不变（支持多页流程：第①步页面1、第②步页面2 各截各的）
+  annoCurImage = image;
+  if (annoSel >= 0 && annoBoxes[annoSel]) {
+    const b = annoBoxes[annoSel];
+    // 若该步已画好真实区域（宽>0），覆盖截图前二次确认，避免把页面2误存到页面1的步骤上
+    if (b.w > 0 && !confirm("用当前屏幕替换【步骤 " + (annoSel + 1) + "】的截图？此步已画好的区域会保留。")) {
+      // 取消：仅刷新画布，不改动该步已存截图
+    } else {
+      b.image = image;
+    }
+  }
+  const img = $("annoImg");
+  img.onload = () => renderAnnoBoxes();
+  img.src = "data:image/png;base64," + image;
+  renderAnnoSteps();
+};
+$("annoPreview").onclick = async () => {
+  const btn = $("annoPreview"); btn.disabled = true; const old = btn.textContent; btn.textContent = "截屏中…";
+  const image = await captureAnnoImage();
+  btn.disabled = false; btn.textContent = old;
+  if (!image) { alert("预览失败（请确认已授权「屏幕录制」与「辅助功能」）"); return; }
+  // 把"当前微信实时画面"作为画布，并叠加所有已画步骤框，检查落点是否还对得上（不真正运行）
+  annoCurImage = image;
+  const img = $("annoImg");
+  img.onload = () => renderAnnoBoxes();
+  img.src = "data:image/png;base64," + image;
+};
+
+// 归一化 [0..1]（相对参考截图，已抗窗口移动 / Retina）；框坐标本身就以归一化存储，这里仅四舍五入
+function annoNorm(b) {
+  const r4 = (v) => +(+v).toFixed(4);
+  return [r4(b.x), r4(b.y), r4(b.w), r4(b.h)];
+}
+
+function renderAnnoBoxes() {
+  const stage = $("annoStage");
+  stage.querySelectorAll(".anno-box").forEach(e => e.remove());
+  annoBoxes.forEach((b, i) => {
+    const d = document.createElement("div");
+    d.className = "anno-box" + (i === annoSel ? " sel" : "");
+    // 关键：用百分比定位，框永远贴合原图，不随浏览器窗口缩放而漂移/缩小
+    d.style.left = (b.x * 100) + "%"; d.style.top = (b.y * 100) + "%";
+    d.style.width = (b.w * 100) + "%"; d.style.height = (b.h * 100) + "%";
+    d.dataset.i = i;
+    const lbl = document.createElement("span"); lbl.className = "lbl";
+    lbl.textContent = `${i + 1} · ${ACTION_LABEL[b.action] || b.action}`;
+    d.appendChild(lbl);
+    const rs = document.createElement("span"); rs.className = "rs"; d.appendChild(rs);
+    d.addEventListener("mousedown", (e) => {
+      const ri = parseInt(d.dataset.i);
+      if (e.target.classList.contains("rs")) {
+        resizing = { index: ri, bx: annoBoxes[ri].x, by: annoBoxes[ri].y, bw: annoBoxes[ri].w, bh: annoBoxes[ri].h };
+      } else {
+        annoSel = ri;
+        const r = stageRect();
+        moving = { index: ri, offXn: (e.clientX - r.left) / r.width - annoBoxes[ri].x, offYn: (e.clientY - r.top) / r.height - annoBoxes[ri].y };
+        renderAnnoSteps();
+      }
+      e.preventDefault(); e.stopPropagation();
+    });
+    stage.appendChild(d);
+  });
+}
+
+$("annoStage").addEventListener("mousedown", (e) => {
+  if (e.target.classList.contains("anno-box") || e.target.classList.contains("rs")) return;
+  const r = stageRect();
+  const sx = (e.clientX - r.left) / r.width, sy = (e.clientY - r.top) / r.height;  // 归一化
+  const idx = annoBoxes.length;
+  annoBoxes.push({ x: sx, y: sy, w: 0, h: 0, action: "tap_region", params: { mode: "center" }, image: annoCurImage });
+  annoSel = idx; drawing = { sx, sy, idx };
+  renderAnnoBoxes(); renderAnnoSteps();
+  e.preventDefault();
+});
+window.addEventListener("mousemove", (e) => {
+  const r = stageRect();
+  if (drawing) {
+    const cx = clamp((e.clientX - r.left) / r.width, 0, 1), cy = clamp((e.clientY - r.top) / r.height, 0, 1);
+    const b = annoBoxes[drawing.idx];
+    b.x = Math.min(drawing.sx, cx); b.y = Math.min(drawing.sy, cy);
+    b.w = Math.abs(cx - drawing.sx); b.h = Math.abs(cy - drawing.sy);
+    renderAnnoBoxes();
+  } else if (moving) {
+    const b = annoBoxes[moving.index];
+    b.x = clamp((e.clientX - r.left) / r.width - moving.offXn, 0, 1 - b.w);
+    b.y = clamp((e.clientY - r.top) / r.height - moving.offYn, 0, 1 - b.h);
+    renderAnnoBoxes();
+  } else if (resizing) {
+    const b = annoBoxes[resizing.index];
+    b.w = clamp((e.clientX - r.left) / r.width - b.x, 0.005, 1 - b.x);
+    b.h = clamp((e.clientY - r.top) / r.height - b.y, 0.005, 1 - b.y);
+    renderAnnoBoxes();
+  }
+});
+window.addEventListener("mouseup", () => {
+  if (drawing) {
+    const b = annoBoxes[drawing.idx];
+    if (b.w < 0.005 || b.h < 0.005) { annoBoxes.splice(drawing.idx, 1); annoSel = Math.max(-1, annoBoxes.length - 1); renderAnnoBoxes(); renderAnnoSteps(); }
+    drawing = null;
+  }
+  moving = null; resizing = null;
+});
+
+function mkSelect(options, val) {
+  const s = document.createElement("select");
+  options.forEach(o => { const op = document.createElement("option"); op.value = o; op.textContent = o; if (o === val) op.selected = true; s.appendChild(op); });
+  return s;
+}
+function mkInput(val, ph) { const i = document.createElement("input"); i.type = "text"; i.value = val || ""; i.placeholder = ph || ""; return i; }
+
+function buildAnnoParams(b) {
+  const frag = document.createDocumentFragment();
+  const add = (label, input) => {
+    const pr = document.createElement("div"); pr.className = "prow";
+    const l = document.createElement("label"); l.textContent = label; pr.appendChild(l); pr.appendChild(input);
+    frag.appendChild(pr);
+  };
+  const p = b.params || (b.params = {});
+  // 通用：该步执行后等待（解决"跳转/弹窗出现前就点了下一步"的时序竞争）
+  // 两种模式：固定 N 秒，或"等到屏幕变化"（轮询屏幕指纹，页面真正变了才继续，最稳）
+  const wa = mkInput(p.wait_after, "如 2.0"); wa.type = "number"; wa.step = "0.1"; wa.min = "0";
+  wa.oninput = () => p.wait_after = wa.value === "" ? undefined : parseFloat(wa.value);
+  add("步后等待(s)", wa);
+  const uc = document.createElement("label"); uc.className = "anno-check";
+  const cb = document.createElement("input"); cb.type = "checkbox"; cb.checked = !!p.wait_until_change;
+  const to = mkInput(p.wait_timeout, "如 8"); to.type = "number"; to.step = "0.5"; to.min = "0.5";
+  to.oninput = () => { p.wait_timeout = to.value === "" ? undefined : parseFloat(to.value); saveAnnoLocal(); };
+  const toPr = document.createElement("div"); toPr.className = "prow"; toPr.style.display = p.wait_until_change ? "" : "none";
+  const toLbl = document.createElement("label"); toLbl.textContent = "变化超时(s)"; toPr.appendChild(toLbl); toPr.appendChild(to);
+  cb.onchange = () => {
+    p.wait_until_change = cb.checked;
+    toPr.style.display = cb.checked ? "" : "none";
+    saveAnnoLocal();
+  };
+  uc.appendChild(cb);
+  uc.appendChild(document.createTextNode(" 等到屏幕变化再继续（跳转/弹窗出现才走下一步）"));
+  const ucPr = document.createElement("div"); ucPr.className = "prow"; ucPr.appendChild(uc); frag.appendChild(ucPr);
+  frag.appendChild(toPr);
+  const wnote = document.createElement("div"); wnote.className = "prow note";
+  wnote.textContent = "抢跑点错时勾这个：点完这一步后自动等到页面真正变化（如卡片→详情页）才走下一步，不靠固定秒数猜。";
+  frag.appendChild(wnote);
+  if (b.action === "wait") {
+    const secs = mkInput(p.seconds, "如 5"); secs.type = "number"; secs.step = "0.5"; secs.min = "0";
+    secs.oninput = () => p.seconds = secs.value === "" ? undefined : parseFloat(secs.value);
+    add("最长等待(s)", secs);
+    const uc = document.createElement("label"); uc.className = "anno-check";
+    const cb = document.createElement("input"); cb.type = "checkbox"; cb.checked = !!p.until_change;
+    cb.onchange = () => p.until_change = cb.checked; uc.appendChild(cb);
+    uc.appendChild(document.createTextNode(" 等到屏幕变化再继续（弹窗/跳转出现）"));
+    const pr = document.createElement("div"); pr.className = "prow"; pr.appendChild(uc); frag.appendChild(pr);
+    const note = document.createElement("div"); note.className = "prow note";
+    note.textContent = "建议放在「触发跳转/弹窗」的步骤之后：等到页面真正变化才继续，避免提前点下一步";
+    frag.appendChild(note);
+    return frag;
+  }
+  if (b.action === "tap_region") {
+    const mode = mkSelect(["center", "template", "text"], p.mode || "center");
+    mode.onchange = () => { p.mode = mode.value; renderAnnoSteps(); };
+    add("模式", mode);
+    if (p.mode === "text") { const t = mkInput(p.text, "区域内要点的文字"); t.oninput = () => p.text = t.value; add("文字", t); }
+    else if (p.mode === "template") { const t = mkInput(p.template, "模板文件名(如 ok.png)"); t.oninput = () => p.template = t.value; add("模板", t); }
+    const note = document.createElement("div"); note.className = "prow note";
+    const ok = p.mode === "text" ? (ocrEngine === "real" || ocrEngine === "lm")
+                                 : p.mode === "template" ? (ocrEngine === "real") : true;
+    note.style.color = (p.mode === "text" || p.mode === "template") && !ok ? "#c2410c" : "";
+    note.textContent = p.mode === "center"
+      ? "center：不依赖 OCR，点区域中心，最稳（这台 Mac 实测零误差）"
+      : (ok
+          ? (p.mode === "text"
+              ? "text：OCR 在「框选范围内」找目标文字并点其质心（LM 网格投票 / 真实 OCR），按钮随标题浮动也能点中"
+              : "template：真实 OCR 在框选范围内模板匹配（需 OCR=real + cv2）")
+          : (p.mode === "text"
+              ? "⚠️ 当前 OCR=mock 或不可用，text 会点错位置，请启动时设 OCR=lm（或 real）"
+              : "⚠️ template 需 OCR=real（PaddleOCR+cv2），当前不可用，建议改用 text 或 center"));
+    frag.appendChild(note);
+  } else if (b.action === "tap_text") {
+    const t = mkInput(p.text, "要点击的文字"); t.oninput = () => p.text = t.value; add("文字", t);
+  } else if (b.action === "type_text") {
+    const t = mkInput(p.text, "要输入的文字"); t.oninput = () => p.text = t.value; add("文字", t);
+  } else if (b.action === "swipe") {
+    const d = mkSelect(["up", "down", "left", "right"], p.direction || "up"); d.onchange = () => p.direction = d.value; add("方向", d);
+    const dist = mkInput(p.distance, "如 300"); dist.type = "number"; dist.step = "10"; dist.min = "0";
+    dist.oninput = () => p.distance = dist.value === "" ? undefined : parseFloat(dist.value);
+    add("距离(px)", dist);
+    const note = document.createElement("div"); note.className = "prow note";
+    note.textContent = "留空=默认约半屏；填数字即拖动总距离（逻辑点/px，与标注框同一坐标系）。距离不够翻不动就调大。";
+    frag.appendChild(note);
+  } else if (b.action === "emit") {
+    // 默认直接引用变量：clipboard 复制的链接 → {{link}}；LLM 识别的标题/地址 → {{venue}}/{{address}}
+    // 这样 copy_link + llm_extract + emit 三步即可把"链接+标题+地址"合并入库（留空=不写）
+    ["venue", "address", "link"].forEach(f => {
+      const def = "{{" + f + "}}";
+      const t = mkInput(p[f] !== undefined ? p[f] : def, f);
+      t.oninput = () => p[f] = t.value === "" ? undefined : t.value;
+      add(f, t);
+    });
+    const note = document.createElement("div"); note.className = "prow note";
+    note.textContent = "默认引用变量：{{link}}=剪贴板链接、{{venue}}/{{address}}=LLM识别。直接写字面量也可；留空=不写";
+    frag.appendChild(note);
+  } else if (b.action === "llm_extract") {
+    const ta = document.createElement("textarea"); ta.rows = 3; ta.style.cssText = "padding:5px 7px;border:1px solid var(--border);border-radius:6px;font-size:12px";
+    ta.value = p.fields || ""; ta.placeholder = "每行一个：变量名:中文描述\n如 venue:场地名称"; ta.oninput = () => p.fields = ta.value;
+    const pr = document.createElement("div"); pr.className = "prow"; pr.style.flexDirection = "column"; pr.style.alignItems = "stretch";
+    const l = document.createElement("label"); l.textContent = "抽取字段"; pr.appendChild(l); pr.appendChild(ta); frag.appendChild(pr);
+  } else if (b.action === "llm_judge") {
+    const t = mkInput(p.prompt || "这是微信小程序页面吗？", "判定提问"); t.oninput = () => p.prompt = t.value; add("提问", t);
+    const ex = mkInput(p.expect || "yes", "期望答案"); ex.oninput = () => p.expect = ex.value; add("期望", ex);
+  } else if (b.action === "capture") {
+    // 截图动作：框选区域即裁剪范围，只保存这一块
+    const note = document.createElement("div"); note.className = "prow note";
+    note.textContent = "截图 = 只保存【框选的那块区域】（不调模型，离线识图用）。在画布上拖动框体、拖右下角调大小，把它盖到你想截的内容上；框的位置/大小就是裁剪范围。要整屏就把框拉到最大。";
+    frag.appendChild(note);
+  }
+  return frag;
+}
+
+function renderAnnoSteps() {
+  const box = $("annoSteps");
+  box.innerHTML = "";
+  $("annoCount").textContent = annoBoxes.length;
+  annoBoxes.forEach((b, i) => {
+    const wrap = document.createElement("div");
+    wrap.className = "anno-step" + (i === annoSel ? " sel" : "");
+    wrap.dataset.i = i;
+    const row1 = document.createElement("div"); row1.className = "row1";
+    // 拖拽手柄（仅手柄可发起拖拽，避免与 select/input 冲突）
+    const h = document.createElement("span"); h.className = "drag-h"; h.textContent = "⠿"; h.title = "拖拽调整顺序";
+    h.draggable = true;
+    h.addEventListener("dragstart", (e) => { annoDragFrom = i; e.dataTransfer.effectAllowed = "move"; e.stopPropagation(); });
+    h.addEventListener("dragend", () => { annoDragFrom = -1; });
+    row1.appendChild(h);
+    const idx = document.createElement("span"); idx.className = "idx"; idx.textContent = i + 1; row1.appendChild(idx);
+    const sel = document.createElement("select");
+    ANNO_ACTIONS.forEach(a => { const o = document.createElement("option"); o.value = a; o.textContent = ACTION_LABEL[a] || a; if (a === b.action) o.selected = true; sel.appendChild(o); });
+    sel.onchange = () => { b.action = sel.value; b.params = {}; renderAnnoBoxes(); renderAnnoSteps(); };
+    row1.appendChild(sel);
+    // 上下移动按钮（拖拽的可靠替代）
+    const up = document.createElement("span"); up.className = "mv"; up.textContent = "▲"; up.title = "上移";
+    up.onclick = (e) => { e.stopPropagation(); moveAnnoStep(i, i - 1); };
+    const dn = document.createElement("span"); dn.className = "mv"; dn.textContent = "▼"; dn.title = "下移";
+    dn.onclick = (e) => { e.stopPropagation(); moveAnnoStep(i, i + 1); };
+    row1.appendChild(up); row1.appendChild(dn);
+    const del = document.createElement("span"); del.className = "del"; del.textContent = "删除";
+    del.onclick = (e) => { e.stopPropagation(); annoBoxes.splice(i, 1); annoSel = Math.min(annoSel, annoBoxes.length - 1); renderAnnoBoxes(); renderAnnoSteps(); };
+    row1.appendChild(del);
+    wrap.appendChild(row1);
+    const params = document.createElement("div"); params.className = "params";
+    params.appendChild(buildAnnoParams(b));
+    wrap.appendChild(params);
+    wrap.onclick = (e) => {
+      const t = e.target;
+      // 点到输入框/复选框/文本域/标签/手柄/箭头时不重渲染，否则刚勾选的复选框会被连同状态一起重建掉，永远选不中
+      if (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.classList.contains("anno-check")
+          || t.classList.contains("del") || t.classList.contains("mv") || t.classList.contains("drag-h")
+          || t.tagName === "SELECT") return;
+      annoSel = i;
+      if (annoBoxes[i] && annoBoxes[i].image) { annoCurImage = annoBoxes[i].image; $("annoImg").src = "data:image/png;base64," + annoCurImage; }
+      renderAnnoBoxes(); renderAnnoSteps();
+    };
+    // 作为拖拽放置目标
+    wrap.addEventListener("dragover", (e) => { e.preventDefault(); e.dataTransfer.dropEffect = "move"; });
+    wrap.addEventListener("drop", (e) => {
+      e.preventDefault();
+      if (annoDragFrom >= 0 && annoDragFrom !== i) moveAnnoStep(annoDragFrom, i);
+      annoDragFrom = -1;
+    });
+    box.appendChild(wrap);
+  });
+  saveAnnoLocal();
+}
+
+// 把步骤 from 移动到位置 to（拖拽或 ▲▼ 共用）；同步维护 annoSel 指向
+function moveAnnoStep(from, to) {
+  if (from < 0 || from >= annoBoxes.length) return;
+  to = Math.max(0, Math.min(annoBoxes.length - 1, to));
+  if (from === to) return;
+  const [m] = annoBoxes.splice(from, 1);
+  annoBoxes.splice(to, 0, m);
+  if (annoSel === from) annoSel = to;
+  else if (from < annoSel && to >= annoSel) annoSel -= 1;
+  else if (from > annoSel && to <= annoSel) annoSel += 1;
+  renderAnnoBoxes(); renderAnnoSteps();
+}
+
+// 把全屏 base64 截图压缩成小尺寸 JPEG，避免原图把 localStorage 的 ~5MB 配额撑爆
+// （之前每步存原图 PNG，几步就超限 → setItem 抛错 → 标注模式崩溃）
+function compressImage(dataUrl, maxW, quality) {
+  return new Promise((resolve) => {
+    try {
+      const img = new Image();
+      img.onload = () => {
+        try {
+          let w = img.width, h = img.height;
+          if (w > maxW) { h = Math.round(h * maxW / w); w = maxW; }
+          const c = document.createElement("canvas");
+          c.width = w; c.height = h;
+          c.getContext("2d").drawImage(img, 0, 0, w, h);
+          resolve(c.toDataURL("image/jpeg", quality));
+        } catch (e) { resolve(""); }  // 压缩失败：丢弃该步图片，绝不再撑爆配额
+      };
+      img.onerror = () => resolve("");
+      img.src = dataUrl;
+    } catch (e) { resolve(""); }
+  });
+}
+
+async function saveAnnoLocal() {
+  try {
+    const boxes = await Promise.all(annoBoxes.map(async (b) => {
+      const nb = Object.assign({}, b);
+      if (nb.image) nb.image = await compressImage(nb.image, 720, 0.6);
+      return nb;
+    }));
+    localStorage.setItem(annoKey(), JSON.stringify({ boxes, cfg: annoCfg, name: $("annoChainName").value }));
+  } catch (e) {
+    console.warn("saveAnnoLocal 失败（可能仍超限）:", e);
+  }
+}
+
+function buildAnnoChain() {
+  const steps = annoBoxes.map((b) => {
+    const s = { action: b.action };
+    const p = b.params || {};
+    if (b.action === "wait") {
+      s.target = {};
+      if (p.seconds != null) s.target.seconds = p.seconds;
+      if (p.until_change) s.target.until_change = true;
+    } else if (b.action === "tap_region") {
+      s.target = { region: annoNorm(b), mode: p.mode || "center" };
+      if (p.mode === "text" && p.text) s.target.text = p.text;
+      if (p.mode === "template" && p.template) s.target.template = p.template;
+    } else if (b.action === "tap_text") {
+      s.target = { text: p.text || "" };
+    } else if (b.action === "type_text") {
+      s.target = { text: p.text || "" };
+    } else if (b.action === "swipe") {
+      const st = { direction: p.direction || "up" };
+      if (p.distance != null) st.distance = p.distance;
+      s.target = st;
+    } else if (b.action === "emit") {
+      const rec = {};
+      ["venue", "address", "link"].forEach(f => {
+        const v = p[f];
+        if (v) rec[f] = v;            // 显式值或 {{变量}}
+        else rec[f] = "{{" + f + "}}"; // 留空 → 自动引用变量，便于组合剪贴板+LLM
+      });
+      s.record = rec;
+    } else if (b.action === "llm_extract") {
+      const fields = {};
+      (p.fields || "").split("\n").forEach(line => { const m = line.split(/[:：]/); if (m.length >= 2) fields[m[0].trim()] = m.slice(1).join(":").trim(); });
+      const t = { fields };
+      const rg = annoNorm(b);
+      if (rg) t.region = rg;   // 把用户框选的范围一并传下去，运行时只识别框内内容
+      s.target = t;
+    } else if (b.action === "llm_judge") {
+      s.target = { prompt: p.prompt || "page ok?", choices: ["yes", "no"], expect: p.expect || "yes" };
+    } else if (b.action === "capture") {
+      s.target = { region: annoNorm(b) };   // 只截框选区域，避免整屏过大；框位置/大小即裁剪范围
+    }
+    // 该步后等待：优先"等到屏幕变化"（轮询页面是否真变了），否则固定秒数；未设置则用全局速度
+    if (p.wait_until_change) {
+      s.wait_until_change = true;
+      if (p.wait_timeout != null) s.wait_timeout = p.wait_timeout;
+    } else if (p.wait_after != null) {
+      s.wait_after = p.wait_after;
+    }
+    return s;
+  });
+  const name = $("annoChainName").value.trim() || "我的抓取链路";
+  let finalSteps = steps;
+  if (annoCfg.loop) {
+    finalSteps = [{ action: "loop", until: { type: "scroll_until_end", max_rounds: parseInt($("annoMaxRounds").value) || 8, no_new_cards: 3 }, body: steps }];
+  }
+  return { name, description: "由标注 UI 生成：拖框定义点击区域 + " + (annoCfg.loop ? "循环遍历" : "顺序执行"), vars: {}, steps: finalSteps };
+}
+
+async function saveAnno(run) {
+  if (!annoBoxes.length) { alert("请先在截图上拖框画出至少一个区域"); return; }
+  const chain = buildAnnoChain();
+  const d = await agentPost("save_chain", { name: chain.name, chain });
+  if (!d.ok) { alert(d.msg || "保存失败"); return; }
+  await loadChainList(d.file);
+  saveAnnoLocal();  // 改名保存后，把当前标注写回「新任务名」对应的独立 key，避免丢失
+  if (run) { await post("start", { chain: d.file }); closeAnno(); }
+  else alert("已保存：" + d.file);
+}
+
+$("btnAnno").onclick = () => openAnno();
+$("annoClose").onclick = () => closeAnno();
+$("annoLoop").onchange = () => { annoCfg.loop = $("annoLoop").checked; saveAnnoLocal(); };
+$("annoMaxRounds").onchange = () => { annoCfg.max_rounds = parseInt($("annoMaxRounds").value) || 8; saveAnnoLocal(); };
+$("annoChainName").oninput = () => saveAnnoLocal();
+$("annoAddCapture").onclick = () => {
+  // 截图步默认给一个居中偏大的占位框，用户再拖动/缩放它到要截的区域
+  annoBoxes.push({ x: 0.28, y: 0.12, w: 0.44, h: 0.76, action: "capture", params: {}, image: annoCurImage });
+  annoSel = annoBoxes.length - 1;
+  renderAnnoBoxes(); renderAnnoSteps();
+};
+$("annoSave").onclick = () => saveAnno(false);
+$("annoSaveRun").onclick = () => saveAnno(true);
+
+// ================= 调试可视化：每步点击区域标红 =================
+// 收到后端 type=click 事件后，把"瞄准区域(红框)+实际落点(红点)"画在点击发生时的全屏截图上。
+let debugClicks = [];   // {action, sid, index, region:[x,y,w,h]|null, point:[x,y]|null, image, screen}
+let debugSel = -1;      // 当前选中的点击序号（-1=最新一条）
+let debugShowAll = false;
+
+// 调试证据开关：勾选后后端每步点击都会记录「点击前/后截图 + 真实落点」到 runs/<ts>/，
+// 供 debug.html（🐞 落点排查视图）对比查看，定位"落点偏了 / 点了但没翻页"。
+(function () {
+  const cb = $("dbgEvidence");
+  const btn = $("btnDebugViewer");
+  const hb = $("hideBrowser");
+  if (cb) cb.addEventListener("change", () => {
+    fetch("/control", { method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "debug", on: cb.checked }) });
+  });
+  if (btn) btn.addEventListener("click", () => window.open("debug.html", "_blank"));
+  if (hb) hb.addEventListener("change", () => {
+    fetch("/control", { method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "hide_browser", on: hb.checked }) });
+  });
+  const vbtn = $("btnVerify");
+  if (vbtn) vbtn.addEventListener("click", () => {
+    let ref = "";
+    try {
+      const o = JSON.parse(localStorage.getItem(annoKey()) || "{}");
+      if (o.boxes && o.boxes[0] && o.boxes[0].image) ref = o.boxes[0].image;
+    } catch (e) {}
+    const sel = (document.getElementById("chainSelect") || {}).value || "";
+    fetch("/control", { method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "verify", step: 0, ref_image: ref, chain: sel }) })
+      .then(r => r.json()).then(j => {
+        if (j.ok) { alert("已单独执行第①步卡片点击并记录了前后截图。\n稍候在「🐞 落点排查视图」对比：\n• 红十字是否在卡片上\n• 点击后屏幕有无变化(changed)\n• 顶部「标注参考图」与运行时截图是否一致"); window.open("debug.html", "_blank"); }
+        else alert(j.msg || "验证启动失败");
+      });
+  });
+  // 点击方式切换
+  const cmSel = $("clickMode");
+  if (cmSel) cmSel.addEventListener("change", () => {
+    fetch("/control", { method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "set_click_mode", mode: cmSel.value }) })
+      .then(r => r.json()).then(j => {
+        if (j.ok && j.click_mode) console.log("[opchain] 点击方式已切换:", j.click_mode.mode);
+      });
+  });
+  // 恢复已保存的点击方式
+  if (cmSel) {
+    try { const s = localStorage.getItem("opchain_click_mode"); if (s) { cmSel.value = s; cmSel.dispatchEvent(new Event("change")); } } catch(e){}
+    cmSel.addEventListener("change", () => { try { localStorage.setItem("opchain_click_mode", cmSel.value); } catch(e){} });
+  }
+
+  // ---- 识别模型（大脑）切换：mock / 本地多模态(qwen2.5vl) / 本地GUI(ui-tars) / 自定义 ----
+  const bmSel = $("brainMode");
+  function applyBrain() {
+    if (!bmSel) return;
+    const v = bmSel.value;
+    const custom = $("brainCustom");
+    let brain = "mock", base_url = "", model = "";
+    if (v === "mock") { brain = "mock"; }
+    else if (v === "local") { brain = "local"; base_url = "http://127.0.0.1:11434/v1"; model = "qwen2.5vl:3b"; }
+    else if (v === "uitars") { brain = "uitars"; base_url = "http://127.0.0.1:11434/v1"; model = "ui-tars:7b"; }
+    else { // custom：通常也是 OpenAI 兼容的本地/云端模型
+      brain = "local";
+      base_url = ($("brainBaseUrl").value || "").trim();
+      model = ($("brainModel").value || "").trim();
+    }
+    if (custom) custom.style.display = (v === "custom") ? "inline-flex" : "none";
+    fetch("/control", { method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "set_brain", brain, base_url, model }) })
+      .then(r => r.json()).then(j => {
+        if (j.ok) console.log("[opchain] 识别模型已切换:", j.brain, j.model, j.base_url);
+        else alert("切换识别模型失败: " + (j.msg || ""));
+      }).catch(() => {});
+    try {
+      localStorage.setItem("opchain_brain_mode", v);
+      localStorage.setItem("opchain_brain_custom", JSON.stringify({ base_url, model }));
+    } catch (e) {}
+  }
+  if (bmSel) {
+    bmSel.addEventListener("change", applyBrain);
+    if ($("brainBaseUrl")) $("brainBaseUrl").addEventListener("change", applyBrain);
+    if ($("brainModel")) $("brainModel").addEventListener("change", applyBrain);
+    // 恢复上次选择（自定义项回填 base_url/model）
+    try {
+      const s = localStorage.getItem("opchain_brain_mode");
+      if (s) {
+        bmSel.value = s;
+        if (s === "custom") {
+          try {
+            const c = JSON.parse(localStorage.getItem("opchain_brain_custom") || "{}");
+            if (c.base_url) $("brainBaseUrl").value = c.base_url;
+            if (c.model) $("brainModel").value = c.model;
+          } catch (e) {}
+        }
+      }
+    } catch (e) {}
+    // 应用一次，使服务端大脑与界面选择一致（没存过则用默认「本地多模态」）
+    applyBrain();
+  }
+})();
+
+function onDebugClick(ev) {
+  debugClicks.push(ev);
+  if (debugClicks.length > 80) debugClicks.shift();  // 防止长循环内存膨胀
+  addDebugListItem(ev, debugClicks.length - 1);
+  if (debugSel < 0) debugSel = debugClicks.length - 1;
+  $("debugCount").textContent = `已记录 ${debugClicks.length} 步点击`;
+  renderDebug();
+}
+
+function addDebugListItem(ev, idx) {
+  const it = document.createElement("div");
+  it.className = "dbg-item" + (idx === debugSel ? " sel" : "");
+  it.dataset.idx = idx;
+  const r = ev.region, p = ev.point;
+  const rtxt = r ? `区域 ${r.map(v => +(v * 100).toFixed(1)).join(", ")}%` : "区域 未知";
+  const ptxt = p ? `落点 ${p.map(v => +(v * 100).toFixed(1)).join(", ")}%` : "落点 未知";
+  it.innerHTML = `<div class="t1"><span class="badge">${ev.index}</span><span class="act">${ev.action}</span></div>`
+    + `<div class="coord">${rtxt}<br/>${ptxt}${ev.image ? "" : " · (Mock 无截图)"}</div>`;
+  it.onclick = () => { debugSel = idx; renderDebug(); };
+  $("debugList").appendChild(it);
+}
+
+function renderDebug() {
+  const empty = $("debugEmpty"), wrap = $("debugWrap"), overlay = $("debugOverlay");
+  if (!debugClicks.length) { empty.style.display = "block"; wrap.style.display = "none"; return; }
+  empty.style.display = "none"; wrap.style.display = "inline-block";
+  // 选中的点击（默认最新）；显示全部时把其它点击也画在同一张最新截图上（仅同页对比有意义）
+  const cur = debugClicks[debugSel >= 0 ? debugSel : debugClicks.length - 1];
+  const img = $("debugImg");
+  if (cur.image) img.src = "data:image/png;base64," + cur.image;
+  else img.removeAttribute("src");
+  overlay.innerHTML = "";
+  const list = debugShowAll ? debugClicks : [cur];
+  const baseImg = cur.image;
+  list.forEach(c => {
+    const dim = (c !== cur);
+    if (c.region) {
+      const d = document.createElement("div");
+      d.className = "dbg-box" + (dim ? " dim" : "");
+      d.style.left = (c.region[0] * 100) + "%"; d.style.top = (c.region[1] * 100) + "%";
+      d.style.width = (c.region[2] * 100) + "%"; d.style.height = (c.region[3] * 100) + "%";
+      overlay.appendChild(d);
+    }
+    if (c.point) {
+      const dot = document.createElement("div");
+      dot.className = "dbg-dot" + (dim ? " dim" : "");
+      dot.style.left = (c.point[0] * 100) + "%"; dot.style.top = (c.point[1] * 100) + "%";
+      overlay.appendChild(dot);
+      const num = document.createElement("div");
+      num.className = "dbg-num" + (dim ? " dim" : "");
+      num.style.left = (c.point[0] * 100) + "%"; num.style.top = (c.point[1] * 100) + "%";
+      num.textContent = c.index;
+      overlay.appendChild(num);
+    }
+  });
+  // 列表高亮同步
+  document.querySelectorAll(".dbg-item").forEach(el => {
+    el.classList.toggle("sel", parseInt(el.dataset.idx) === debugSel);
+  });
+}
+
+$("btnDebugAll").onclick = () => { debugShowAll = !debugShowAll; renderDebug(); };
+$("btnDebugClear").onclick = () => {
+  debugClicks = []; debugSel = -1; debugShowAll = false;
+  $("debugList").innerHTML = ""; $("debugCount").textContent = "尚未运行";
+  renderDebug();
+};
+
+// 调试(单步)：以 stepping 模式启动，每执行一步自动暂停，便于在「调试」标签逐条查看红框/红点
+$("btnDebugStep").onclick = () => {
+  const sel = $("chainSelect").value;
+  const body = { action: "start", speed: parseFloat($("speed").value), step: true };
+  if (sel) body.chain = sel;
+  // 先清掉上次的调试记录，避免新旧混淆
+  debugClicks = []; debugSel = -1; debugShowAll = false;
+  $("debugList").innerHTML = ""; $("debugCount").textContent = "单步调试中…";
+  fetch("/control", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  // 自动切到调试标签
+  document.querySelectorAll(".tab").forEach(x => x.classList.remove("active"));
+  const t = [...document.querySelectorAll(".tab")].find(x => x.dataset.tab === "debug");
+  if (t) t.click();
+};
+// 单步模式下，"单步"按钮继续往下走一步
+$("btnStep").onclick = () => post("step");
+
+connect();
+
+</script>
+</body>
+</html>

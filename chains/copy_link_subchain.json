@@ -1,0 +1,9 @@
+{
+  "name": "copy_link_from_new_miniapp",
+  "description": "新小程序内 - 右上角点点点 - 复制链接",
+  "steps": [
+    {"action": "tap_image", "target": {"template": "templates/more_dots.png", "threshold": 0.85}},
+    {"action": "tap_text", "target": {"text": "复制链接"}},
+    {"action": "copy_link", "save_to": {"link": "link"}}
+  ]
+}

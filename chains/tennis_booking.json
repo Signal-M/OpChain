@@ -1,0 +1,25 @@
+{
+  "name": "网球约球抓取",
+  "description": "列表遍历抓取场地名/地址/订场链接",
+  "vars": {},
+  "steps": [
+    {"action": "assert", "target": {"expect_text": "球场列表"}},
+    {
+      "action": "loop",
+      "until": {"type": "scroll_until_end", "max_rounds": 6, "no_new_cards": 3},
+      "body": [
+        {"action": "tap_text", "target": {"text": "预订"}, "on_fail": {"retry": 2}},
+        {"action": "tap_text", "target": {"text": "同意"}, "on_fail": {"retry": 0}, "description": "关闭隐私协议弹窗（首次进入详情页会弹出，点「同意」后才能看到完整详情页；若弹窗不出现则静默跳过）"},
+        {"action": "ocr_extract", "target": {"region": [0.02, 0.05, 0.96, 0.22], "fields": {"venue": "场地[:：]?\\s*(.+)", "address": "地址[:：]?\\s*(.+)"}}, "save_to": {"venue": "venue", "address": "address"}, "wait_after": 0.8},
+        {"action": "tap_text", "target": {"text": "立即订场"}},
+        {"action": "tap_text", "target": {"text": "确定"}, "wait_after": {"until_text": "小程序"}},
+        {"action": "subchain", "ref": "copy_link_from_new_miniapp", "save_to": {"link": "link"}},
+        {"action": "back"},
+        {"action": "back"},
+        {"action": "assert", "target": {"expect_text": "球场列表"}},
+        {"action": "emit", "record": {"venue": "{{venue}}", "address": "{{address}}", "link": "{{link}}"}},
+        {"action": "swipe", "target": {"direction": "up", "distance_ratio": 0.6}}
+      ]
+    }
+  ]
+}

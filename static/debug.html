@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>点击落点排查 · OpChain</title>
+<style>
+  :root { --bg:#0f1115; --card:#181b22; --line:#2a2f3a; --txt:#e6e8ec; --mut:#9aa3b2;
+          --ok:#34d399; --bad:#f87171; --acc:#60a5fa; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--txt);
+         font:14px/1.5 -apple-system,"PingFang SC",Microsoft YaHei,sans-serif; }
+  header { position:sticky; top:0; z-index:5; background:#12151b; border-bottom:1px solid var(--line);
+           padding:12px 18px; display:flex; align-items:center; gap:14px; flex-wrap:wrap; }
+  header h1 { font-size:15px; margin:0; font-weight:600; }
+  header .hint { color:var(--mut); font-size:12px; }
+  button { background:var(--acc); color:#06121f; border:0; border-radius:8px; padding:7px 14px;
+           font-weight:600; cursor:pointer; }
+  button.ghost { background:#222732; color:var(--txt); }
+  .summary { padding:10px 18px; color:var(--mut); font-size:13px; border-bottom:1px solid var(--line); }
+  .summary b { color:var(--txt); }
+  .summary .bad { color:var(--bad); }
+  .wrap { padding:16px 18px; display:grid; grid-template-columns:repeat(auto-fill,minmax(420px,1fr));
+          gap:16px; }
+  .step { background:var(--card); border:1px solid var(--line); border-radius:12px; overflow:hidden; }
+  .step .head { display:flex; align-items:center; gap:10px; padding:10px 12px; border-bottom:1px solid var(--line); }
+  .step .head .no { background:#222732; border-radius:6px; padding:2px 8px; font-weight:700; }
+  .step .head .act { font-weight:600; }
+  .step .head .tag { margin-left:auto; font-size:12px; padding:2px 8px; border-radius:20px; }
+  .tag.ok { background:rgba(52,211,153,.15); color:var(--ok); }
+  .tag.bad { background:rgba(248,113,113,.15); color:var(--bad); }
+  .imgs { display:flex; gap:8px; padding:10px 12px; }
+  .imgs figure { margin:0; flex:1; }
+  .imgs figcaption { font-size:11px; color:var(--mut); text-align:center; margin-bottom:4px; }
+  .shot { position:relative; width:100%; background:#000; border-radius:8px; overflow:hidden; }
+  .shot img { width:100%; display:block; }
+  .shot canvas { position:absolute; left:0; top:0; pointer-events:none; }
+  .meta { padding:0 12px 12px; font-size:12px; color:var(--mut); }
+  .meta code { color:var(--acc); }
+  .empty { padding:60px 18px; text-align:center; color:var(--mut); }
+  a { color:var(--acc); }
+  .refbox { padding:10px 18px 0; }
+  .refbox .cap { color:var(--mut); font-size:12px; margin-bottom:6px; }
+  .refbox img { max-width:340px; border:1px solid var(--line); border-radius:8px; display:block; }
+</style>
+</head>
+<body>
+<header>
+  <h1>🐞 点击落点排查</h1>
+  <span class="hint">先在主界面勾选「记录每步证据」并运行一次，这里就会显示每步「点击前/后」截图与真实落点。</span>
+  <button class="ghost" id="refresh">刷新</button>
+  <button id="auto">自动刷新：关</button>
+</header>
+<div class="summary" id="summary">加载中…</div>
+<div class="wrap" id="wrap"></div>
+
+<script>
+const $ = (s) => document.querySelector(s);
+let timer = null;
+
+async function load() {
+  let data;
+  try {
+    const r = await fetch("/debug_latest");
+    data = await r.json();
+  } catch (e) {
+    $("#summary").textContent = "无法连接后端：" + e.message;
+    return;
+  }
+  const steps = data.steps || [];
+  const run = data.run;
+  const wrap = $("#wrap");
+  wrap.innerHTML = "";
+
+  if (!steps.length) {
+  $("#summary").innerHTML =
+    '暂无证据。请到主界面：① 勾选「记录每步证据」 → ② 点「开始运行」跑一遍 → ③ 回来点「刷新」。';
+    wrap.innerHTML =
+      '<div class="empty">还没有抓到任何一步的证据。<br/>请确认已在主界面开启「记录每步证据」后再运行一次。</div>';
+    return;
+  }
+
+  // 顶部显示"标注参考图"（你画框用的那张），与运行时截图对比，看微信有没有挪位 / 坐标是否过期
+  if (data.ref) {
+    const refUrl = `/debug_img?run=${encodeURIComponent(run)}&file=${encodeURIComponent(data.ref)}`;
+    const box = document.createElement("div");
+    box.className = "refbox";
+    box.innerHTML = `<div class="cap">标注参考图（你画第①步框时截的那张；应与下方"点击前"一致，否则微信挪位了/坐标过期）</div><img src="${refUrl}" alt="ref"/>`;
+    $("#summary").insertAdjacentElement("beforebegin", box);
+  }
+
+  const noChange = steps.filter(s => s.changed === false && !s.delayed_changed);
+  const slowJump = steps.filter(s => s.delayed_changed === true);
+  $("#summary").innerHTML =
+    `本次运行 <b>${run}</b> 共 <b>${steps.length}</b> 个点击步骤；` +
+    `其中真正「点击后无变化」的仅 <span class="bad">${noChange.length}</span> 步` +
+    `${slowJump.length ? `（另有 <b style="color:var(--ok)">${slowJump.length}</b> 步"延迟3s后才变"＝跳转慢/小程序异步加载，点击其实生效了）` : ""}。<br/>` +
+    `绿框＝标注的瞄准区域，红十字＝真实落点。重点看第①步卡片点击有没有命中、延迟3s后有没有翻页。`;
+
+  for (const s of steps) {
+    const card = document.createElement("div");
+    card.className = "step";
+    const changed = s.changed;
+    const tag = changed
+      ? '<span class="tag ok">屏幕已变化 ✓</span>'
+      : '<span class="tag bad">屏幕无变化 ✗</span>';
+    const before = run ? `/debug_img?run=${encodeURIComponent(run)}&file=${encodeURIComponent(s.before)}` : "";
+    const after  = run ? `/debug_img?run=${encodeURIComponent(run)}&file=${encodeURIComponent(s.after)}` : "";
+    card.innerHTML = `
+      <div class="head">
+        <span class="no">${s.step}</span>
+        <span class="act">${s.action}</span>
+        ${tag}
+      </div>
+      <div class="imgs">
+        <figure>
+          <figcaption>点击前</figcaption>
+          <div class="shot"><img src="${before}" alt="before" crossorigin="anonymous"/></div>
+        </figure>
+        <figure>
+          <figcaption>点击后</figcaption>
+          <div class="shot"><img src="${after}" alt="after" crossorigin="anonymous"/></div>
+        </figure>
+        ${s.delayed ? `<figure>
+          <figcaption>延迟0.8s后</figcaption>
+          <div class="shot"><img src="/debug_img?run=${encodeURIComponent(run)}&file=${encodeURIComponent(s.delayed)}" alt="delayed" crossorigin="anonymous"/></div>
+        </figure>` : ""}
+      </div>
+      <div class="meta">
+        瞄准区域(归一化): <code>${JSON.stringify(s.region)}</code><br/>
+        真实落点(归一化): <code>${JSON.stringify(s.click)}</code><br/>
+        实际点击逻辑点数: <code>${s.click && s.screen ? (s.click[0]*s.screen[0]).toFixed(0)+", "+(s.click[1]*s.screen[1]).toFixed(0) : "-"}</code>（屏 ${s.screen}）<br/>
+        ${s.delayed_changed ? '<span style="color:var(--ok)">✅ 延迟3s后屏幕已变化 → 点击生效，只是小程序跳转慢(异步加载)，并非没点到</span>' : ''}
+        ${s.click_mode ? `<br/>点击方式: <code>${s.click_mode}</code>` : ''}
+        ${s.frontmost ? `<br/>点击前最前窗口: <code style="color:${s.frontmost.toLowerCase().includes('wechat') ? 'var(--ok)' : 'var(--bad)'}">${s.frontmost}</code>${!s.frontmost.toLowerCase().includes('wechat') && s.frontmost !== '(permission_denied)' && s.frontmost !== '(unknown)' ? ' ⚠️ 不是微信！' : ''}` : ''}
+      </div>`;
+    wrap.appendChild(card);
+
+    // 在「点击前」图上叠加 绿框(区域) + 红十字(落点)
+    const shot = card.querySelector(".shot");
+    const img = shot.querySelector("img");
+    img.onload = () => {
+      const c = document.createElement("canvas");
+      c.width = img.clientWidth;
+      c.height = img.clientHeight;
+      c.style.width = img.clientWidth + "px";
+      c.style.height = img.clientHeight + "px";
+      shot.appendChild(c);
+      const ctx = c.getContext("2d");
+      const W = c.width, H = c.height;
+      // 绿框
+      if (Array.isArray(s.region) && s.region.length === 4) {
+        ctx.strokeStyle = "#34d399"; ctx.lineWidth = 2;
+        ctx.strokeRect(s.region[0]*W, s.region[1]*H, s.region[2]*W, s.region[3]*H);
+      }
+      // 红十字（落点）
+      if (Array.isArray(s.click) && s.click.length === 2) {
+        const x = s.click[0]*W, y = s.click[1]*H, r = 14;
+        ctx.strokeStyle = "#f87171"; ctx.lineWidth = 2.5;
+        ctx.beginPath(); ctx.moveTo(x-r,y); ctx.lineTo(x+r,y);
+        ctx.moveTo(x,y-r); ctx.lineTo(x,y+r); ctx.stroke();
+        ctx.beginPath(); ctx.arc(x,y,4,0,Math.PI*2); ctx.fillStyle="#f87171"; ctx.fill();
+      }
+    };
+  }
+}
+
+$("#refresh").onclick = load;
+$("#auto").onclick = () => {
+  if (timer) { clearInterval(timer); timer = null; $("#auto").textContent = "自动刷新：关"; }
+  else { timer = setInterval(load, 3000); $("#auto").textContent = "自动刷新：开"; }
+};
+load();
+</script>
+</body>
+</html>

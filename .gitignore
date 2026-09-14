@@ -1,0 +1,40 @@
+# ===== 运行产物 / 大文件（切勿入库）=====
+# 证据与日志：每次运行在 runs/ 落盘点击前后截图 + evidence.jsonl，轻松上 GB
+runs/
+captures/
+# 持久化库（运行时自动重建）：emit 落库记录，含个人抓取痕迹
+data/
+# 本地日志
+*.log
+/tmp/opchain_ui.log
+
+# ===== Python 缓存 =====
+__pycache__/
+*.pyc
+*.pyo
+.Python
+.venv/
+venv/
+
+# ===== 系统文件 =====
+.DS_Store
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# ===== 密钥 / 环境变量 =====
+.env
+.env.*
+*.key
+credentials*
+
+# ===== 运行时生成的链路 =====
+chains/agent_synth.json
+
+# ===== 个人测试链路（仅保留演示用两条）=====
+chains/*.json
+!chains/tennis_booking.json
+!chains/copy_link_subchain.json
+
+# ===== 内部设计笔记（不对外）=====
+坐标对齐改造方案.md

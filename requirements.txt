@@ -1,0 +1,13 @@
+# OpChain 依赖说明
+# ---------------------------------------------------------------------------
+# 基础（Mock 模式）：零第三方依赖，仅用 Python 3.8+ 标准库即可完整跑通。
+#   → 直接 `python app.py` 即可，无需安装下列任何包。
+#
+# 真机设备 / 真实 OCR 文字定位：按需安装（adapter 懒加载，未装不影响 Mock 模式）
+paddleocr
+opencv-python
+pyperclip
+pillow
+
+# Windows PC 客户端专用（仅 Windows 需要）
+pywinauto; sys_platform == 'win32'
