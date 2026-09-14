@@ -1,0 +1,5 @@
+blank_issues_enabled: true
+contact_links:
+  - name: 🔒 安全漏洞请私下上报（不要公开 Issue）
+    url: https://github.com/m2290526022-boop/OpChain/security/advisories/new
+    about: 安全相关问题请走 SECURITY.md 的私下渠道，避免公开披露。

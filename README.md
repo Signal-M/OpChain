@@ -1,6 +1,10 @@
 # OpChain · 本地多模态 GUI Agent 自动化引擎
 
+![CI](https://github.com/m2290526022-boop/OpChain/actions/workflows/ci.yml/badge.svg)
+
 > **Agent 生成 RPA，确定性重放复用。** 把"看屏 → 决策 → 点击"的 GUI 操作声明成一份 JSON **操作链路**，用本地多模态模型（Ollama / Qwen-VL / UI-TARS）驱动探索；探索完成后自动**合成确定性链路**，之后交给解释器**零模型调用免费重放**。
+
+![OpChain Mock Demo](docs/demo.gif)
 
 OpChain 是一个本地优先（local-first）的 GUI 自动化引擎：后端纯 Python 标准库、前端零构建原生 JS，开箱即跑。设备与识别均为**可插拔适配器**——换场景改配置、换环境换适配器。内置适配器已在 **macOS 本机（Apple Silicon / Intel）**、**Android（ADB）**、**Windows PC 客户端**三类环境验证，其中 macOS 本机以某小程序 WebView 作为首要验证场景。
 
@@ -133,6 +137,11 @@ OpChain/
 ## 合规声明
 
 ⚠️ **本项目仅供学习与研究目的。** 自动化操作第三方应用（尤其是带有反自动化机制的平台）可能违反其服务条款或相关法律法规。使用者须自行评估并承担全部合规责任；本项目不对任何滥用导致的账号封禁、法律责任或数据损失负责。请勿将本项目用于任何未获授权的访问或商业爬取。
+
+## 贡献与安全
+
+- 想参与开发？请看 [CONTRIBUTING.md](./CONTRIBUTING.md)（开发环境、测试、PR 规范）。
+- 发现安全漏洞？请按 [SECURITY.md](./SECURITY.md) **私下**上报，不要公开 Issue。
 
 ## License
 
