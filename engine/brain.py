@@ -71,16 +71,33 @@ class BaseBrain:
 # Mock：网球约球流程状态机（零依赖、可离线演示）
 # --------------------------------------------------------------------------
 class MockBrain(BaseBrain):
-    """基于当前页 + 历史轨迹推断下一步；历史上出现 copy_link 且回到 list 即视为一轮完成。"""
+    """基于当前页 + 历史轨迹推断下一步；历史上出现 copy_link 且回到 list 即视为一轮完成。
+
+    为让合成的确定性链路带上 loop（列表滚动采集语义），完成一轮后会「演示性地滑动到下一卡片」
+    一次再停止。真实多卡片遍历由 Interpreter 的 scroll_until_end 驱动，与此处无关。
+    """
+
+    def __init__(self):
+        # 是否已演示过一次「滑到下一卡片」：仅用于让合成的确定性链路带上 loop
+        self._swiped = False
+
+    def reset(self):
+        self._swiped = False
 
     def decide(self, goal, perception, history):
         page = (perception or {}).get("page")
+        rounds = sum(
+            1 for h in (history or [])
+            if h.get("action", {}).get("action") == "copy_link"
+        )
 
-        # 一轮完成的标志：曾复制过链接，且当前已回到列表
-        if page == "list" and any(
-            h.get("action", {}).get("action") == "copy_link" for h in history
-        ):
-            return {"action": "stop_explore", "reason": "已完成一轮「订场→复制链接」，可合成确定性链路"}
+        # 一轮完成：曾复制过链接，且当前已回到列表。
+        # 演示性地「滑到下一卡片」一次（让合成链路带上 loop），随后安全停止。
+        if page == "list" and rounds >= 1:
+            if not self._swiped:
+                self._swiped = True
+                return self._a("swipe", {"direction": "up"}, "列表页：滑动到下一场地卡片（演示列表采集）")
+            return {"action": "stop_explore", "reason": "已完成一轮「订场→复制链接」且演示过列表滑动，可合成确定性链路"}
 
         if page == "list":
             return self._a("tap_text", {"text": "预订"}, "列表页：点击卡片预订，进入详情")

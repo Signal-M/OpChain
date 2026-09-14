@@ -54,11 +54,10 @@ class Agent:
                         raise StopExecution()
                     time.sleep(0.1)
                 perception = self.device.perceive()
-                shot = perception.get("screenshot")
-                if shot:
-                    self.bus.publish({"type": "screen", "image": shot})
-                else:
-                    # 截屏为空/无效：多半是 macOS「屏幕录制」权限未授权，或运行 app 的终端未在该权限列表
+                # 仅「截屏模式(MacDevice 等)」下，screenshot 缺失才视为权限问题并安全停止；
+                # 结构树模式(MockDevice 等)本就无 screenshot 字段，不应因此中断演示/测试。
+                perception_modality = perception.get("modality")
+                if perception_modality == "screenshot" and not perception.get("screenshot"):
                     self.bus.publish({"type": "log", "level": "ERROR",
                                       "msg": "截屏为空/无效：请检查 macOS「屏幕录制」权限——"
                                              "系统设置→隐私与安全性→屏幕录制，勾选运行 python3 app.py 的「终端」；"
@@ -66,6 +65,9 @@ class Agent:
                     self.bus.publish({"type": "agent", "phase": "explore_done",
                                       "msg": "截屏为空，已安全停止探索"})
                     break
+                shot = perception.get("screenshot")
+                if shot:
+                    self.bus.publish({"type": "screen", "image": shot})
                 action = self.brain.decide(goal, perception, self.trace)
                 if action.get("action") == "stop_explore":
                     self.bus.publish({"type": "agent", "phase": "explore_done",
