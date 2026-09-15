@@ -13,7 +13,7 @@
 请通过以下私下渠道上报，我们会尽快响应：
 
 - GitHub Security Advisories（推荐）：在仓库页面 → **Security → Advisories → Report a vulnerability**
-  直达链接：https://github.com/m2290526022-boop/OpChain/security/advisories/new
+  直达链接：https://github.com/Signal-M/OpChain/security/advisories/new
 - 或直接邮件联系维护者（见仓库 Profile）。
 
 请尽量提供：

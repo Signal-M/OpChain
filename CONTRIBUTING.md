@@ -7,7 +7,7 @@
 OpChain 后端纯 Python 标准库，**Mock 模式零依赖**，开箱即跑：
 
 ```bash
-git clone https://github.com/m2290526022-boop/OpChain.git
+git clone https://github.com/Signal-M/OpChain.git
 cd OpChain
 python app.py                 # Python 3.8+ 即可，默认 Mock 模式
 # 浏览器打开 http://127.0.0.1:8000

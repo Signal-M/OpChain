@@ -1,6 +1,6 @@
 # OpChain · 本地多模态 GUI workflow 自动化引擎
 
-![CI](https://github.com/m2290526022-boop/OpChain/actions/workflows/ci.yml/badge.svg)
+![CI](https://github.com/Signal-M/OpChain/actions/workflows/ci.yml/badge.svg)
 
 ## 背景
 OpChain 由 wechat-miniapp-link-copier 演进而来，是一个本地运行的 GUI workflow 自动化引擎。
