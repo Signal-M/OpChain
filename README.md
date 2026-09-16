@@ -3,9 +3,9 @@
 ![CI](https://github.com/Signal-M/OpChain/actions/workflows/ci.yml/badge.svg)
 
 ## 背景
-OpChain 由 wechat-miniapp-link-copier 演进而来，是一个本地运行的 GUI workflow 自动化引擎。
+OpChain 由 [wechat-miniapp-link-copier](https://github.com/Signal-M/wechat-miniapp-link-copier/tree/main) 演进而来，是一个本地运行的 GUI workflow 自动化引擎。
 
-**问题场景：**做网球约球小程序时，需采集网球场地的详细信息与订场链接。这类数据没有公开 API、也无法通过爬虫获取，从竞品小程序逐个人工收集成本极高。
+**问题场景：**做 [网搭星球](https://github.com/Signal-M/tennis-bauhouse) 小程序时，需采集网球场地的详细信息与订场链接。这类数据没有公开 API、也无法通过爬虫获取，从竞品小程序逐个人工收集成本极高。
 
 **设计思路：**借鉴 computer use 与自动化测试的思想，把「人操作电脑」的过程拆解为可编排、可复用的自动化流程。
 
